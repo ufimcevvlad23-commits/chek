@@ -2,95 +2,72 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Чек-лист документов</title>
+  <title>📋 Чек-лист документов</title>
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; }
+    h2 { margin-bottom: 15px; }
     .item { margin: 5px 0; }
   </style>
-  <script src="https://api.bitrix24.com/api/v1/"></script>
 </head>
 <body>
   <h2>📋 Чек-лист документов</h2>
-  <div id="checklist"></div>
+  <div id="checklist">
+    <div class="item"><input type="checkbox" value="Копия паспорта"> Копия паспорта</div>
+    <div class="item"><input type="checkbox" value="Копия СНИЛС"> Копия СНИЛС</div>
+    <div class="item"><input type="checkbox" value="Копия ИНН"> Копия ИНН</div>
+    <div class="item"><input type="checkbox" value="Копия свидетельства о браке/расторжении"> Копия свидетельства о браке/расторжении</div>
+    <div class="item"><input type="checkbox" value="Копия выписки из ЭТК"> Копия выписки из ЭТК</div>
+    <div class="item"><input type="checkbox" value="Копия лицевого счета"> Копия лицевого счета</div>
+    <div class="item"><input type="checkbox" value="Копия справки 2-НДФЛ"> Копия справки 2-НДФЛ</div>
+    <div class="item"><input type="checkbox" value="Копия справки об отсутствии судимости"> Копия справки об отсутствии судимости</div>
+    <div class="item"><input type="checkbox" value="Копия справки об отсутствии статуса ИП"> Копия справки об отсутствии статуса ИП</div>
+    <div class="item"><input type="checkbox" value="Копия квитанции о депозите суда"> Копия квитанции о депозите суда</div>
+    <div class="item"><input type="checkbox" value="Копия квитанции о направлении заявления"> Копия квитанции о направлении заявления</div>
+    <div class="item"><input type="checkbox" value="Копия доверенности на представителя"> Копия доверенности на представителя</div>
+    <div class="item"><input type="checkbox" value="Копия выписки из ОКБ/НБКИ"> Копия выписки из ОКБ/НБКИ</div>
+    <div class="item"><input type="checkbox" value="Копия выписки по счетам"> Копия выписки по счетам</div>
+    <div class="item"><input type="checkbox" value="Копия брачного договора"> Копия брачного договора</div>
+  </div>
+
+  <button id="saveBtn">💾 Сохранить</button>
 
   <script>
-    // Список пунктов
-    const items = [
-      "Копия паспорта",
-      "Копия СНИЛС",
-      "Копия ИНН",
-      "Копия свидетельства о браке/расторжении",
-      "Копия выписки из ЭТК",
-      "Копия лицевого счета",
-      "Копия справки 2-НДФЛ",
-      "Копия справки об отсутствии судимости",
-      "Копия справки об отсутствии статуса ИП",
-      "Квитанция о внесении депозита суда",
-      "Квитанция о направлении заявления",
-      "Копия доверенности",
-      "Копия выписки из НБКИ",
-      "Копия выписки по счетам",
-      "Копия выписки по счету №___",
-      "Копия брачного договора"
-    ];
+    const dealId = new URLSearchParams(window.location.search).get("deal_id"); 
+    const fieldCode = "UF_CRM_1758827061"; // CHECKLIST_JSON
+    const webhook = "https://YOUR_PORTAL.bitrix24.ru/rest/XXX/WEBHOOK/";
 
-    let dealId;
-    let checklistData = {};
-
-    // Загружаем данные из сделки
-    BX24.init(() => {
-      dealId = BX24.placement.info().options.dealId;
-
-      BX24.callMethod(
-        "crm.deal.get",
-        { id: dealId },
-        result => {
-          if (result.error()) {
-            console.error(result.error());
-          } else {
-            const deal = result.data();
-            checklistData = deal.UF_CRM_1758827061 ? JSON.parse(deal.UF_CRM_1758827061) : {};
-            renderChecklist();
-          }
-        }
-      );
-    });
-
-    // Отрисовка чек-листа
-    function renderChecklist() {
-      const container = document.getElementById("checklist");
-      container.innerHTML = "";
-
-      items.forEach((label, i) => {
-        const checked = checklistData[i] || false;
-        const div = document.createElement("div");
-        div.className = "item";
-        div.innerHTML = `<input type="checkbox" id="chk${i}" ${checked ? "checked" : ""}> ${label}`;
-        container.appendChild(div);
-
-        document.getElementById(`chk${i}`).addEventListener("change", e => {
-          checklistData[i] = e.target.checked;
-          saveChecklist();
-        });
-      });
+    // Загрузка сохранённых данных
+    async function loadChecklist() {
+      if (!dealId) return;
+      const res = await fetch(`${webhook}crm.deal.get.json?id=${dealId}`);
+      const data = await res.json();
+      if (data.result && data.result[fieldCode]) {
+        try {
+          const saved = JSON.parse(data.result[fieldCode]);
+          document.querySelectorAll("#checklist input").forEach(cb => {
+            cb.checked = saved.includes(cb.value);
+          });
+        } catch(e) {}
+      }
     }
 
-    // Сохранение чек-листа в сделку
-    function saveChecklist() {
-      BX24.callMethod(
-        "crm.deal.update",
-        {
+    // Сохранение данных
+    async function saveChecklist() {
+      const selected = [...document.querySelectorAll("#checklist input:checked")]
+        .map(cb => cb.value);
+      await fetch(`${webhook}crm.deal.update.json`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
           id: dealId,
-          fields: {
-            "UF_CRM_1758827061": JSON.stringify(checklistData)
-          }
-        },
-        res => {
-          if (res.error()) console.error(res.error());
-          else console.log("Checklist saved");
-        }
-      );
+          fields: { [fieldCode]: JSON.stringify(selected) }
+        })
+      });
+      alert("✅ Сохранено!");
     }
+
+    document.getElementById("saveBtn").addEventListener("click", saveChecklist);
+    loadChecklist();
   </script>
 </body>
 </html>
