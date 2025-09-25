@@ -4,41 +4,33 @@
   <meta charset="UTF-8">
   <title>Чек-лист документов</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-      background: #f9f9f9;
-    }
-    h2 {
-      margin-bottom: 15px;
-    }
-    .item {
-      margin: 8px 0;
-    }
-    .item input {
-      margin-right: 8px;
-    }
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    h2 { margin-bottom: 15px; }
+    .item { margin: 5px 0; }
   </style>
 </head>
 <body>
   <h2>📋 Чек-лист документов</h2>
   <div id="checklist">
-    <div class="item"><input type="checkbox">Копия паспорта</div>
-    <div class="item"><input type="checkbox">Копия СНИЛС</div>
-    <div class="item"><input type="checkbox">Копия ИНН</div>
-    <div class="item"><input type="checkbox">Копия свидетельства о браке/расторжении брака</div>
-    <div class="item"><input type="checkbox">Копия выписки из ЭТК</div>
-    <div class="item"><input type="checkbox">Копия свидетельства о состоянии лицевого счёта</div>
-    <div class="item"><input type="checkbox">Копия справок 2-НДФЛ</div>
-    <div class="item"><input type="checkbox">Копия справки об отсутствии судимости</div>
-    <div class="item"><input type="checkbox">Копия справки об отсутствии статуса ИП</div>
-    <div class="item"><input type="checkbox">Копия квитанции о внесении средств на депозит суда</div>
-    <div class="item"><input type="checkbox">Копия квитанции о направлении заявления</div>
-    <div class="item"><input type="checkbox">Копия доверенности на представителя</div>
-    <div class="item"><input type="checkbox">Копия выписки из ОКБ/НБКИ</div>
-    <div class="item"><input type="checkbox">Копия выписки по имеющимся счетам</div>
-    <div class="item"><input type="checkbox">Копия выписки по счёту № ______</div>
-    <div class="item"><input type="checkbox">Копия брачного договора (при наличии)</div>
+    <div class="item"><input type="checkbox"> Копия паспорта</div>
+    <div class="item"><input type="checkbox"> Копия СНИЛС</div>
+    <div class="item"><input type="checkbox"> Копия ИНН</div>
+    <div class="item"><input type="checkbox"> Копия свидетельства о браке</div>
   </div>
+
+  <script>
+    const checkboxes = document.querySelectorAll("#checklist input[type='checkbox']");
+
+    // Загружаем сохранённое состояние
+    checkboxes.forEach((checkbox, index) => {
+      const saved = localStorage.getItem("checkbox_" + index);
+      if (saved === "true") {
+        checkbox.checked = true;
+      }
+      checkbox.addEventListener("change", () => {
+        localStorage.setItem("checkbox_" + index, checkbox.checked);
+      });
+    });
+  </script>
 </body>
 </html>
