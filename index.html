@@ -7,6 +7,7 @@
     body { font-family: Arial, sans-serif; padding: 20px; }
     h2 { margin-bottom: 15px; }
     .item { margin: 5px 0; }
+    button { margin-top: 15px; padding: 8px 15px; }
   </style>
 </head>
 <body>
@@ -31,15 +32,28 @@
 
   <button id="saveBtn">💾 Сохранить</button>
 
+  <script src="https://api.bitrix24.com/api/v1/"></script>
   <script>
-    const dealId = new URLSearchParams(window.location.search).get("deal_id"); 
     const fieldCode = "UF_CRM_1758827061"; // CHECKLIST_JSON
     const webhook = "https://YOUR_PORTAL.bitrix24.ru/rest/XXX/WEBHOOK/";
 
-    // Загрузка сохранённых данных
+    let dealId = null;
+
+    // --- Получаем deal_id из Bitrix24 ---
+    BX24.init(function(){
+      const options = BX24.placement.info().options;
+      dealId = options.ID;
+      loadChecklist();
+    });
+
+    // --- Загружаем чеклист из сделки ---
     async function loadChecklist() {
       if (!dealId) return;
-      const res = await fetch(`${webhook}crm.deal.get.json?id=${dealId}`);
+      const res = await fetch(webhook + "crm.deal.get", {
+        method: "POST",
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: new URLSearchParams({ id: dealId })
+      });
       const data = await res.json();
       if (data.result && data.result[fieldCode]) {
         try {
@@ -47,27 +61,26 @@
           document.querySelectorAll("#checklist input").forEach(cb => {
             cb.checked = saved.includes(cb.value);
           });
-        } catch(e) {}
+        } catch(e) { console.error("Ошибка парсинга:", e); }
       }
     }
 
-    // Сохранение данных
+    // --- Сохраняем чеклист в сделку ---
     async function saveChecklist() {
       const selected = [...document.querySelectorAll("#checklist input:checked")]
         .map(cb => cb.value);
-      await fetch(`${webhook}crm.deal.update.json`, {
+      await fetch(webhook + "crm.deal.update", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: new URLSearchParams({
           id: dealId,
-          fields: { [fieldCode]: JSON.stringify(selected) }
+          [`fields[${fieldCode}]`]: JSON.stringify(selected)
         })
       });
       alert("✅ Сохранено!");
     }
 
     document.getElementById("saveBtn").addEventListener("click", saveChecklist);
-    loadChecklist();
   </script>
 </body>
 </html>
