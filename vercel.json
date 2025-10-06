@@ -1,11 +1,15 @@
 {
   "version": 2,
-  "functions": {
-    "api/hh_sync.js": {
-      "runtime": "nodejs20.x"
+  "builds": [
+    {
+      "src": "api/hh_sync.js",
+      "use": "@vercel/node"
     }
-  },
+  ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/hh_sync.js" }
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    }
   ]
 }
