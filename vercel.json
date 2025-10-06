@@ -4,6 +4,10 @@
     { "src": "index.html", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/(.*)", "dest": "/index.html" }
+    {
+      "src": "/(.*)",
+      "methods": ["GET", "POST", "HEAD", "OPTIONS"],
+      "dest": "/index.html"
+    }
   ]
 }
