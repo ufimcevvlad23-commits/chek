@@ -5,9 +5,14 @@
   ],
   "routes": [
     {
-      "src": "/(.*)",
-      "methods": ["GET", "POST", "HEAD", "OPTIONS"],
-      "dest": "/index.html"
+      "src": "/.*",
+      "dest": "/index.html",
+      "methods": ["GET", "POST", "OPTIONS", "HEAD"],
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS, HEAD",
+        "Access-Control-Allow-Headers": "Content-Type"
+      }
     }
   ]
 }
