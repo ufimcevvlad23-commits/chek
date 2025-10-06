@@ -1,7 +1,7 @@
 export default async function handler(req, res) {
   try {
     // Настройки Bitrix24 и HH.ru
-    const BITRIX_WEBHOOK = "https://nta-company.bitrix24.ru/rest/56435/j7rzo0xhs0ityawj/";
+    const BITRIX_WEBHOOK = "https://nta-company.bitrix24.ru/rest/56435/4z7sfmwa5fi3k9rz/";
     const FUNNEL_ID = "44"; // Воронка "Найм персонала"
     const STAGE_ID = "C44:NEW"; // Стадия "Договориться о собеседовании"
 
