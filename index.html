@@ -4,10 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>📋 Чек-лист документов</title>
+  <script src="https://api.bitrix24.com/api/v1/"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
-      margin: 40px;
+      margin: 30px;
       background-color: #f4f6f8;
     }
     h2 {
@@ -19,11 +20,13 @@
       padding: 20px;
       border-radius: 10px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      width: 450px;
+      width: 480px;
     }
     .item {
       margin-bottom: 10px;
       font-size: 15px;
+      display: flex;
+      align-items: center;
     }
     input[type="checkbox"] {
       margin-right: 10px;
@@ -41,6 +44,11 @@
     }
     button:hover {
       background: #0b5ed7;
+    }
+    .status {
+      margin-top: 15px;
+      font-weight: bold;
+      color: #555;
     }
   </style>
 </head>
@@ -62,25 +70,73 @@
     <div class="item"><input type="checkbox" value="Копия выписки из ОКБ/НБКИ"> Копия выписки из ОКБ/НБКИ</div>
     <div class="item"><input type="checkbox" value="Копия выписки по счетам"> Копия выписки по счетам</div>
     <div class="item"><input type="checkbox" value="Копия брачного договора"> Копия брачного договора</div>
-    <button onclick="saveChecklist()">💾 Сохранить</button>
+    <button id="saveBtn">💾 Сохранить</button>
+    <div class="status" id="status"></div>
   </div>
 
   <script>
-    function saveChecklist() {
+    const fieldCode = "UF_CRM_1758827061"; // ⚠️ Замени на свой код пользовательского поля
+    let dealId = null;
+
+    function getChecklistData() {
       const items = document.querySelectorAll('input[type="checkbox"]');
-      const data = Array.from(items).map(i => i.checked);
-      localStorage.setItem('checklist', JSON.stringify(data));
-      alert('✅ Чек-лист сохранён');
+      return Array.from(items).map(i => ({ name: i.value, checked: i.checked }));
     }
 
-    window.onload = () => {
-      const saved = JSON.parse(localStorage.getItem('checklist'));
-      if (saved) {
-        document.querySelectorAll('input[type="checkbox"]').forEach((i, idx) => {
-          i.checked = saved[idx];
+    function setChecklistData(data) {
+      if (!data) return;
+      const items = document.querySelectorAll('input[type="checkbox"]');
+      items.forEach((i, idx) => {
+        if (data[idx]) i.checked = data[idx].checked;
+      });
+    }
+
+    function showStatus(text, ok = true) {
+      const el = document.getElementById("status");
+      el.textContent = text;
+      el.style.color = ok ? "green" : "red";
+    }
+
+    async function loadChecklist() {
+      BX24.init(async function() {
+        const params = BX24.placement.info();
+        dealId = params.options?.ID || params.options?.ENTITY_ID;
+
+        if (!dealId) return showStatus("❌ Не удалось определить сделку", false);
+
+        BX24.callMethod("crm.deal.get", { id: dealId }, function(result) {
+          if (result.error()) {
+            showStatus("Ошибка загрузки данных: " + result.error(), false);
+          } else {
+            const data = result.data()[fieldCode];
+            if (data) {
+              try {
+                setChecklistData(JSON.parse(data));
+              } catch {
+                console.warn("Некорректный формат данных чек-листа");
+              }
+            }
+            showStatus("✅ Загружено");
+          }
         });
-      }
-    };
+      });
+    }
+
+    async function saveChecklist() {
+      if (!dealId) return showStatus("❌ Сделка не определена", false);
+      const data = JSON.stringify(getChecklistData());
+
+      BX24.callMethod("crm.deal.update", { id: dealId, fields: { [fieldCode]: data } }, function(result) {
+        if (result.error()) {
+          showStatus("Ошибка сохранения: " + result.error_description, false);
+        } else {
+          showStatus("💾 Чек-лист сохранён!");
+        }
+      });
+    }
+
+    document.getElementById("saveBtn").addEventListener("click", saveChecklist);
+    window.onload = loadChecklist;
   </script>
 </body>
 </html>
