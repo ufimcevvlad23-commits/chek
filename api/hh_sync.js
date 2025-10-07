@@ -1,57 +1,35 @@
-import fetch from "node-fetch";
-
-const BITRIX_WEBHOOK = "https://nta-company.bitrix24.ru/rest/56435/8c0a36bju30jdlsp/";
-const HH_ACCESS_TOKEN = "USERH6FI4QDCTBSH4Q35V15LBQ50JGO2HUTHI4SPALKNCJID7DQ87BU8IDJCLUMT"; // токен hh.ru
-
-// ID воронки и стадии (твоё)
-const FUNNEL_ID = 44; // Найм персонала
-const STAGE_ID = "C44:NEW"; // Договориться о собеседовании
-
 export default async function handler(req, res) {
   try {
-    console.log("🔄 Запуск синхронизации Bitrix24 ↔ hh.ru...");
+    // Разрешаем все методы для Bitrix (включая OPTIONS и POST)
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-    // 1️⃣ Получаем отклики с hh.ru
-    const hhResponse = await fetch("https://api.hh.ru/employers/me/vacancies", {
-      headers: { Authorization: `Bearer ${HH_ACCESS_TOKEN}` },
-    });
-
-    if (!hhResponse.ok) {
-      const errorText = await hhResponse.text();
-      console.error("Ошибка HH.ru:", errorText);
-      return res.status(500).json({ error: "Ошибка при получении данных с hh.ru" });
+    // Обработка preflight-запроса
+    if (req.method === "OPTIONS") {
+      return res.status(200).end();
     }
 
-    const hhData = await hhResponse.json();
-    console.log(`✅ Найдено ${hhData.items.length} вакансий`);
-
-    // 2️⃣ Для примера создадим сделку в Bitrix24
-    for (const vacancy of hhData.items) {
-      const dealTitle = `Новый отклик: ${vacancy.name}`;
-
-      const dealData = {
-        fields: {
-          TITLE: dealTitle,
-          CATEGORY_ID: FUNNEL_ID,
-          STAGE_ID: STAGE_ID,
-          SOURCE_ID: "HH",
-          COMMENTS: `Вакансия: ${vacancy.name}, опубликована ${vacancy.published_at}`,
-        },
-      };
-
-      const bitrixResponse = await fetch(`${BITRIX_WEBHOOK}crm.deal.add.json`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(dealData),
-      });
-
-      const bitrixResult = await bitrixResponse.json();
-      console.log("Создана сделка:", bitrixResult);
+    // Пример: если кто-то открыл /api/hh_sync в браузере
+    if (req.method === "GET") {
+      return res.status(200).send("HH sync API работает ✅");
     }
 
-    return res.status(200).json({ message: "Синхронизация завершена успешно ✅" });
-  } catch (error) {
-    console.error("Ошибка синхронизации:", error);
-    return res.status(500).json({ error: error.message });
+    // Основная логика (интеграция HH)
+    if (req.method === "POST") {
+      // Здесь будет код интеграции HH -> Bitrix
+      // например:
+      // const data = req.body;
+      // await syncToBitrix(data);
+
+      return res.status(200).json({ success: true, message: "Данные приняты" });
+    }
+
+    // Если метод не поддерживается
+    res.status(405).json({ error: "Метод не поддерживается" });
+
+  } catch (err) {
+    console.error("Ошибка API:", err);
+    res.status(500).json({ error: "Внутренняя ошибка сервера" });
   }
 }
