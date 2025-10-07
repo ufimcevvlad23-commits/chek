@@ -1,6 +1,6 @@
 import fetch from "node-fetch";
 
-const BITRIX_WEBHOOK = "https://nta-company.bitrix24.ru/rest/56435/4z7sfmwa5fi3k9rz/";
+const BITRIX_WEBHOOK = "https://nta-company.bitrix24.ru/rest/56435/8c0a36bju30jdlsp/";
 const HH_ACCESS_TOKEN = "USERH6FI4QDCTBSH4Q35V15LBQ50JGO2HUTHI4SPALKNCJID7DQ87BU8IDJCLUMT"; // токен hh.ru
 
 // ID воронки и стадии (твоё)
