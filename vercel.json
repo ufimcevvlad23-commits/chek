@@ -1,20 +1,20 @@
 {
   "version": 2,
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "X-Frame-Options", "value": "ALLOWALL" },
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
-      ]
-    }
+  "public": true,
+  "builds": [
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "handler.html", "use": "@vercel/static" }
   ],
-  "rewrites": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "destination": "/handler.html"
+      "src": "/",
+      "dest": "/index.html",
+      "methods": ["GET", "POST", "OPTIONS"]
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html",
+      "methods": ["GET", "POST", "OPTIONS"]
     }
   ]
 }
