@@ -1,5 +1,16 @@
 {
   "version": 2,
+  "builds": [
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "handler.html", "use": "@vercel/static" }
+  ],
+  "routes": [
+    {
+      "src": "/.*",
+      "methods": ["GET", "POST", "OPTIONS"],
+      "dest": "/handler.html"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
@@ -9,13 +20,6 @@
         { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
         { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
       ]
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "methods": ["GET", "POST", "OPTIONS"],
-      "dest": "/handler.html"
     }
   ]
 }
