@@ -1,12 +1,5 @@
 {
   "version": 2,
-  "routes": [
-    {
-      "src": "/(.*)",
-      "methods": ["GET", "POST", "OPTIONS"],
-      "dest": "/handler.html"
-    }
-  ],
   "headers": [
     {
       "source": "/(.*)",
@@ -16,6 +9,13 @@
         { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
         { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
       ]
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "methods": ["GET", "POST", "OPTIONS"],
+      "dest": "/handler.html"
     }
   ]
 }
