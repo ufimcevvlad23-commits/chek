@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Перенаправление...</title>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      // читаем тело POST и перенаправляем в index.html с параметрами
+      window.addEventListener("message", (event) => {
+        if (event.data && event.data.placement) {
+          const params = new URLSearchParams();
+          if (event.data.options?.ID) params.append("deal_id", event.data.options.ID);
+          window.location.href = `/index.html?${params.toString()}`;
+        }
+      });
+
+      // если Bitrix не шлёт postMessage, показываем fallback
+      setTimeout(() => {
+        window.location.href = "/index.html";
+      }, 2000);
+    });
+  </script>
+</head>
+<body>
+  <h3>⏳ Загружается чек-лист...</h3>
+</body>
+</html>
