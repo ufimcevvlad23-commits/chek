@@ -1,11 +1,18 @@
 {
   "name": "chek",
   "version": "1.0.0",
-  "type": "module",
+  "description": "Виджет для Bitrix24 — чек-лист документов и обновление сделок",
+  "author": "ufimcev Vlad",
+  "license": "MIT",
+  "private": true,
   "scripts": {
-    "start": "node server.js"
+    "start": "echo 'Static project — no build needed'"
   },
-  "dependencies": {
-    "node-fetch": "^3.3.2"
-  }
+  "keywords": [
+    "bitrix24",
+    "widget",
+    "checklist",
+    "crm",
+    "vercel"
+  ]
 }
