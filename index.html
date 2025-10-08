@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>📋 Чек-лист документов</title>
-  <script src="https://api.bitrix24.com/api/v1/"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -75,64 +74,90 @@
   </div>
 
   <script>
-    const fieldCode = "UF_CRM_1758827061"; // ⚠️ Замени на свой код пользовательского поля
-    let dealId = null;
+    // === ⚙️ Настройки ===
+    const webhook = "https://nta-company.bitrix24.ru/rest/56435/tkhvw3wzcpj80s54/"; // твой вебхук
+    const fieldCode = "UF_CRM_1758827061"; // поле, где хранится чек-лист
+    const defaultDealId = 42; // запасной ID, если не найден
+
+    // === ⚙️ Вспомогательные функции ===
+    const statusEl = document.getElementById("status");
+
+    function showStatus(msg, ok = true) {
+      statusEl.textContent = msg;
+      statusEl.style.color = ok ? "green" : "red";
+    }
 
     function getChecklistData() {
-      const items = document.querySelectorAll('input[type="checkbox"]');
-      return Array.from(items).map(i => ({ name: i.value, checked: i.checked }));
+      const boxes = document.querySelectorAll('input[type="checkbox"]');
+      return Array.from(boxes).map(b => ({ name: b.value, checked: b.checked }));
     }
 
     function setChecklistData(data) {
       if (!data) return;
-      const items = document.querySelectorAll('input[type="checkbox"]');
-      items.forEach((i, idx) => {
-        if (data[idx]) i.checked = data[idx].checked;
+      const boxes = document.querySelectorAll('input[type="checkbox"]');
+      data.forEach((item, idx) => {
+        if (boxes[idx]) boxes[idx].checked = item.checked;
       });
     }
 
-    function showStatus(text, ok = true) {
-      const el = document.getElementById("status");
-      el.textContent = text;
-      el.style.color = ok ? "green" : "red";
-    }
-
-    async function loadChecklist() {
-      BX24.init(async function() {
-        const params = BX24.placement.info();
-        dealId = params.options?.ID || params.options?.ENTITY_ID;
-
-        if (!dealId) return showStatus("❌ Не удалось определить сделку", false);
-
-        BX24.callMethod("crm.deal.get", { id: dealId }, function(result) {
-          if (result.error()) {
-            showStatus("Ошибка загрузки данных: " + result.error(), false);
-          } else {
-            const data = result.data()[fieldCode];
-            if (data) {
-              try {
-                setChecklistData(JSON.parse(data));
-              } catch {
-                console.warn("Некорректный формат данных чек-листа");
-              }
-            }
-            showStatus("✅ Загружено");
-          }
+    async function getDealData(dealId) {
+      try {
+        const res = await fetch(`${webhook}crm.deal.get.json`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ id: dealId })
         });
-      });
+        const data = await res.json();
+        return data.result;
+      } catch (e) {
+        console.error("Ошибка getDealData:", e);
+        return null;
+      }
+    }
+
+    async function updateDealField(dealId, field, value) {
+      try {
+        const res = await fetch(`${webhook}crm.deal.update.json`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            id: dealId,
+            [`fields[${field}]`]: value
+          })
+        });
+        return await res.json();
+      } catch (e) {
+        console.error("Ошибка updateDealField:", e);
+      }
+    }
+
+    // === 🚀 Основные функции ===
+    async function loadChecklist() {
+      const params = new URLSearchParams(window.location.search);
+      const dealId = params.get("deal_id") || defaultDealId;
+
+      showStatus("⏳ Загружаем данные...");
+
+      const deal = await getDealData(dealId);
+      if (!deal) return showStatus("❌ Не удалось получить данные сделки", false);
+
+      try {
+        const savedData = JSON.parse(deal[fieldCode]);
+        if (savedData) setChecklistData(savedData);
+        showStatus("✅ Загружено");
+      } catch {
+        showStatus("⚠️ Нет сохранённых данных");
+      }
     }
 
     async function saveChecklist() {
-      if (!dealId) return showStatus("❌ Сделка не определена", false);
+      const params = new URLSearchParams(window.location.search);
+      const dealId = params.get("deal_id") || defaultDealId;
       const data = JSON.stringify(getChecklistData());
 
-      BX24.callMethod("crm.deal.update", { id: dealId, fields: { [fieldCode]: data } }, function(result) {
-        if (result.error()) {
-          showStatus("Ошибка сохранения: " + result.error_description, false);
-        } else {
-          showStatus("💾 Чек-лист сохранён!");
-        }
-      });
+      const result = await updateDealField(dealId, fieldCode, data);
+      if (result?.result) showStatus("💾 Сохранено!");
+      else showStatus("❌ Ошибка сохранения", false);
     }
 
     document.getElementById("saveBtn").addEventListener("click", saveChecklist);
