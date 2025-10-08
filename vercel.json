@@ -1,18 +1,12 @@
 {
   "version": 2,
-  "public": true,
   "builds": [
     { "src": "index.html", "use": "@vercel/static" },
     { "src": "handler.html", "use": "@vercel/static" }
   ],
   "routes": [
     {
-      "src": "/",
-      "dest": "/index.html",
-      "methods": ["GET", "POST", "OPTIONS"]
-    },
-    {
-      "src": "/(.*)",
+      "src": "/.*",
       "dest": "/index.html",
       "methods": ["GET", "POST", "OPTIONS"]
     }
