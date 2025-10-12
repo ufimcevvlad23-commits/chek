@@ -2,18 +2,14 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <title>Чек-лист</title>
+  <title>Чек-лист сделки</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body{font-family:system-ui,Arial,sans-serif;margin:16px}
     .item{margin:6px 0}
     #saveBtn{margin-top:12px;padding:10px 16px;border:0;border-radius:8px;background:#2fc6f6;color:#fff;cursor:pointer}
-    .muted{color:#666}
-    .ok{color:#0a7f2e}
-    .err{color:#c00}
-    .row{margin:8px 0}
-    code{background:#f3f3f3;padding:2px 6px;border-radius:6px}
-    .small{font-size:12px}
+    .muted{color:#666}.ok{color:#0a7f2e}.err{color:#c00}
+    .row{margin:8px 0}.small{font-size:12px}
   </style>
 </head>
 <body>
@@ -21,11 +17,10 @@
 
   <div id="content" style="display:none">
     <div class="row small muted">
-      Сделка: <span id="dealLabel">—</span><br>
-      Поле: <span id="fieldLabel">—</span>
+      Сделка: <span id="dealLabel">—</span> • Поле: <span id="fieldLabel">—</span>
     </div>
 
-    <!-- ЧЕКБОКСЫ — как вы просили -->
+    <!-- чекбоксы -->
     <div class="item"><input type="checkbox" value="Копия паспорта"> Копия паспорта</div>
     <div class="item"><input type="checkbox" value="Копия СНИЛС"> Копия СНИЛС</div>
     <div class="item"><input type="checkbox" value="Копия ИНН"> Копия ИНН</div>
@@ -44,120 +39,79 @@
 
     <button id="saveBtn">💾 Сохранить</button>
     <div id="status" class="muted" style="margin-top:8px"></div>
-
-    <!-- Скрытое поле для синхронизации/копирования -->
-    <input type="hidden" id="UF_DYNAMIC_FIELD" value="">
-    <div class="row small muted">
-      Текущее значение поля: <code id="mirror"></code>
-      <div class="small">Также доступно в <code>location.hash</code> и в <code>document.title</code>.</div>
-    </div>
   </div>
 
 <script>
 (function(){
-  // ===== НАСТРОЙКИ ПО УМОЛЧАНИЮ =====
-  const DEFAULT_FIELD = 'UF_CRM_CHECKLIST'; // можно заменить на ваш код поля
-  // ===================================
+  // --- входные параметры из URL ---
+  const params = new URLSearchParams(location.search);
+  const DEAL_ID = params.get('deal');                   // обязательно
+  const FIELD   = params.get('field') || 'UF_CRM_CHECKLIST'; // ваш UF_код
 
   const state = document.getElementById('state');
   const content = document.getElementById('content');
-  const statusEl = document.getElementById('status');
-  const saveBtn = document.getElementById('saveBtn');
-  const mirror = document.getElementById('mirror');
-  const hiddenField = document.getElementById('UF_DYNAMIC_FIELD');
   const dealLabel = document.getElementById('dealLabel');
   const fieldLabel = document.getElementById('fieldLabel');
+  const saveBtn = document.getElementById('saveBtn');
+  const statusEl = document.getElementById('status');
 
-  const params = new URLSearchParams(location.search);
-  const DEAL_ID = params.get('deal') || '';            // ID сделки (для ключа localStorage)
-  const FIELD = params.get('field') || DEFAULT_FIELD;  // код поля
-  const URL_VALUE = params.get('value');               // стартовое значение из URL (JSON или CSV)
-
-  dealLabel.textContent = DEAL_ID || '—';
-  fieldLabel.textContent = FIELD;
-
-  function qs(sel){ return Array.from(document.querySelectorAll(sel)); }
-
-  function setStatus(msg, cls){
-    statusEl.className = cls || 'muted';
-    statusEl.textContent = msg;
-  }
-
-  function encodeTitle(s){
-    try { return btoa(unescape(encodeURIComponent(s))).slice(0,200); }
-    catch { return s.slice(0,200); }
-  }
-
-  function getChecked(){
-    return qs('input[type="checkbox"]').filter(i=>i.checked).map(i=>i.value);
-  }
-
-  function setChecked(values){
-    const set = new Set((values||[]).map(String));
-    qs('input[type="checkbox"]').forEach(i => { i.checked = set.has(i.value); });
-  }
+  const qs = (sel)=>Array.from(document.querySelectorAll(sel));
+  const getValues = () => qs('input[type="checkbox"]').filter(i=>i.checked).map(i=>i.value);
+  const setValues = (arr)=>{
+    const set = new Set((arr||[]).map(String));
+    qs('input[type="checkbox"]').forEach(cb => cb.checked = set.has(cb.value));
+  };
 
   function parseValue(v){
     if (v == null || v === '') return [];
+    if (Array.isArray(v)) return v.map(String);
     try { const j = JSON.parse(v); return Array.isArray(j) ? j : [String(j)]; } catch(_){}
     if (String(v).includes(',')) return String(v).split(',').map(s=>s.trim()).filter(Boolean);
     return [String(v)];
   }
+  function stringify(arr){ return JSON.stringify(arr || []); }
 
-  function stringify(values){
-    // Храним как JSON (универсально и без потерь)
-    return JSON.stringify(values);
-  }
+  async function load(){
+    if (!DEAL_ID) { state.textContent = 'Не передан параметр deal в URL'; return; }
+    dealLabel.textContent = DEAL_ID;
+    fieldLabel.textContent = FIELD;
 
-  function storageKey(){
-    return 'checklist:' + (DEAL_ID || 'default') + ':' + FIELD;
+    state.textContent = 'Загружаю поле сделки…';
+    const r = await fetch(`/api/deal-field?deal=${encodeURIComponent(DEAL_ID)}&field=${encodeURIComponent(FIELD)}`);
+    const data = await r.json();
+    if (!data.ok) {
+      state.textContent = 'Не удалось прочитать поле (пока пусто или нет доступа). Можно выбрать и сохранить.';
+    } else {
+      setValues(parseValue(data.value));
+      state.textContent = 'Загружено.';
     }
-  function loadInitial(){
-    // Приоритет: ?value=... -> localStorage -> пусто
-    if (URL_VALUE && URL_VALUE.trim() !== '') return parseValue(URL_VALUE);
-    const raw = localStorage.getItem(storageKey());
-    return parseValue(raw);
+    state.style.display = 'none';
+    content.style.display = 'block';
   }
 
-  function syncOutputs(values){
-    const str = stringify(values);
-    hiddenField.id = FIELD;             // подменяем id скрытого поля на реальный код
-    hiddenField.value = str;            // значение поля (можно копировать)
-    mirror.textContent = str;           // отображение
-    location.hash = 'value=' + encodeURIComponent(str); // чтобы внешка могла считать без SDK
-    document.title = encodeTitle(str);  // короткая «сигнатура» в title
-  }
+  async function save(){
+    const values = getValues();
+    statusEl.textContent = 'Сохраняю…';
 
-  function save(values){
-    const str = stringify(values);
-    localStorage.setItem(storageKey(), str); // пер-сделочный кеш
-    syncOutputs(values);
-  }
-
-  // Инициализация
-  const startValues = loadInitial();
-  setChecked(startValues);
-  syncOutputs(startValues);
-
-  state.style.display = 'none';
-  content.style.display = 'block';
-  setStatus('Готово', 'ok');
-
-  // Кнопка сохранить (по факту — форсируем запись и показываем статус)
-  saveBtn.addEventListener('click', () => {
-    const values = getChecked();
-    save(values);
-    setStatus('Сохранено локально • поле обновлено • hash/title обновлены', 'ok');
-  });
-
-  // Сохранять на лету при клике по чекбоксу
-  qs('input[type="checkbox"]').forEach(cb => {
-    cb.addEventListener('change', () => {
-      save(getChecked());
-      setStatus('Автосохранение…', 'muted');
+    const r = await fetch('/api/deal-field', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        deal: DEAL_ID,
+        field: FIELD,
+        value: stringify(values) // пишем как JSON-строку в поле (тип "Строка")
+      })
     });
-  });
+    const data = await r.json();
+    if (data.ok) statusEl.innerHTML = '<span class="ok">Сохранено</span>';
+    else statusEl.innerHTML = '<span class="err">Ошибка: ' + (data.error || 'save_failed') + '</span>';
+  }
 
+  // авто-сохранение при кликах (можно выключить)
+  qs('input[type="checkbox"]').forEach(cb => cb.addEventListener('change', save));
+  document.getElementById('saveBtn').addEventListener('click', save);
+
+  load();
 })();
 </script>
 </body>
