@@ -70,19 +70,17 @@
 <script>
 (() => {
   // === настройки ===
-  const FIELD_CODE = 'UF_CRM_CHECKLIST'; // код пользовательского поля сделки (тип "Строка")
-  const AUTOSAVE_MS = 600;               // дебаунс автосохранения
+  const FIELD_CODE = 'UF_CRM_CHECKLIST'; // код пользовательского поля сделки (тип "Строка", туда кладём JSON)
+  const AUTOSAVE_MS = 600;
 
   const toast = document.getElementById('toast');
   const saveBtn = document.getElementById('saveBtn');
   const inputs = Array.from(document.querySelectorAll('#list input[type="checkbox"]'));
 
-  // ——— утилиты
-  const ok = m => { toast.className='toast ok'; toast.textContent=m; };
-  const info = m => { toast.className='toast muted'; toast.textContent=m; };
+  const ok  = m => { toast.className='toast ok'; toast.textContent=m; };
+  const info= m => { toast.className='toast muted'; toast.textContent=m; };
   const err = m => { toast.className='toast err'; toast.textContent=m; };
 
-  // JSON ⇄ массив
   const toJSON = arr => JSON.stringify(arr || []);
   const fromUnknown = v => {
     if (v == null || v === '') return [];
@@ -92,16 +90,13 @@
     return [String(v)];
   };
 
-  // отмечаем галочки из массива
   const apply = values => {
     const set = new Set((values||[]).map(String));
     inputs.forEach(cb => cb.checked = set.has(cb.value));
   };
-
-  // собираем выбранные
   const collect = () => inputs.filter(i=>i.checked).map(i=>i.value);
 
-  // «тихое» определение ID сделки из referrer
+  // Тихо определяем ID сделки по referrer
   function detectDealId() {
     try {
       const ref = document.referrer || '';
@@ -122,51 +117,50 @@
       return null;
     } catch { return null; }
   }
+  const DEAL_ID = detectDealId(); // если не нашли — UI работает, но писать не будет
 
-  const DEAL_ID = detectDealId(); // может быть null — тогда просто UI без записи
+  async function apiGet() {
+    if (!DEAL_ID) return { ok:false };
+    const r = await fetch(`/api/deal-field?deal=${encodeURIComponent(DEAL_ID)}&field=${encodeURIComponent(FIELD_CODE)}`);
+    return r.json();
+  }
+  async function apiSet(value) {
+    if (!DEAL_ID) return { ok:false, error:"no_deal_id" };
+    const r = await fetch('/api/deal-field', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ deal: DEAL_ID, field: FIELD_CODE, value })
+    });
+    return r.json();
+  }
 
-  async function readField() {
-    if (!DEAL_ID) { info(''); return; } // молчим — UI пустой
+  async function load() {
     try {
-      const url = `/api/deal-field?deal=${encodeURIComponent(DEAL_ID)}&field=${encodeURIComponent(FIELD_CODE)}`;
-      const r = await fetch(url);
-      const data = await r.json();
+      const data = await apiGet();
       if (data && data.ok) {
         apply(fromUnknown(data.value));
         info('Загружено.');
       } else {
-        // поле пустое — оставляем чек-лист пустым
-        info('');
+        info(''); // поле пустое — просто тихо показываем пустой чек-лист
       }
-    } catch {
-      // сеть/сервер не мешают UI — просто не показываем ошибок
-      info('');
-    }
+    } catch { info(''); }
   }
 
-  async function writeField(values) {
-    if (!DEAL_ID) return; // если ID не найден — ничего не пишем
+  async function save() {
+    const payload = toJSON(collect()); // JSON-строка массива
     try {
-      const r = await fetch('/api/deal-field', {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify({ deal: DEAL_ID, field: FIELD_CODE, value: toJSON(values) })
-      });
-      const data = await r.json();
-      if (data && data.ok) ok('Сохранено');
+      const data = await apiSet(payload);
+      if (data.ok) ok('Сохранено');
       else err('Не удалось сохранить');
     } catch { err('Ошибка сети'); }
   }
 
-  // автосохранение с дебаунсом
-  let t; const autoSave = () => {
-    clearTimeout(t); t = setTimeout(() => writeField(collect()), AUTOSAVE_MS);
-  };
+  // автосохранение
+  let t; const autoSave = () => { clearTimeout(t); t = setTimeout(save, AUTOSAVE_MS); };
   inputs.forEach(cb => cb.addEventListener('change', autoSave));
-  saveBtn.addEventListener('click', () => writeField(collect()));
+  saveBtn.addEventListener('click', save);
 
-  // старт
-  readField();
+  load();
 })();
 </script>
 </body>
