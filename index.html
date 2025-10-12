@@ -2,14 +2,21 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <title>Чек-лист</title>
+  <title>Чек-лист документов</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root{ --bg:#fff; --card:#fff; --muted:#6b7280; --ok:#0a7f2e; --err:#c00; --accent:#2fc6f6; --border:#e5e7eb; }
     *{ box-sizing:border-box }
     html,body{ height:100% }
-    body{ margin:0; padding:20px; background:var(--bg); font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; color:#111827; }
-    .card{ max-width:720px; margin:0 auto; background:var(--card); border:1px solid var(--border); border-radius:16px; padding:20px; box-shadow:0 4px 16px rgba(0,0,0,.04); }
+    body{
+      margin:0; padding:20px; background:var(--bg);
+      font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; color:#111827;
+    }
+    .card{
+      max-width:720px; margin:0 auto; background:var(--card);
+      border:1px solid var(--border); border-radius:16px; padding:20px;
+      box-shadow:0 4px 16px rgba(0,0,0,.04);
+    }
     h1{ margin:0 0 12px 0; font-size:18px }
     .sub{ color:var(--muted); margin-bottom:16px }
     .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:10px 16px; margin-top:8px; }
@@ -26,7 +33,7 @@
 <body>
   <div class="card">
     <h1>Чек-лист документов</h1>
-    <div id="subtitle" class="sub">Отметьте полученные документы и нажмите «Сохранить».</div>
+    <div class="sub">Отметьте полученные документы и нажмите «Сохранить».</div>
 
     <div class="grid" id="list">
       <label><input type="checkbox" value="Копия паспорта"><span>Копия паспорта</span></label>
@@ -54,155 +61,161 @@
   </div>
 
 <script>
-(() => {
-  const FIELD_CODE = 'UF_CRM_CHECKLIST';   // код поля-СТРОКИ (храним JSON-массив)
-  const AUTOSAVE_MS = 600;
+(function(){
+  // ===== Настройки по умолчанию =====
+  const DEFAULT_FIELD = 'UF_CRM_CHECKLIST'; // код поля-СТРОКИ (сюда пишем JSON-массив)
 
-  const toast = document.getElementById('toast');
-  const saveBtn = document.getElementById('saveBtn');
-  const hint = document.getElementById('hint');
-  const inputs = Array.from(document.querySelectorAll('#list input[type="checkbox"]'));
+  // ——— UI helpers
+  var toast = document.getElementById('toast');
+  var saveBtn = document.getElementById('saveBtn');
+  var hint = document.getElementById('hint');
+  var inputs = Array.from(document.querySelectorAll('#list input[type="checkbox"]'));
 
-  const ok  = m => { toast.className='toast ok'; toast.textContent=m; };
-  const info= m => { toast.className='toast muted'; toast.textContent=m; };
-  const err = m => { toast.className='toast err'; toast.textContent=m; };
+  function ok(m){ toast.className='toast ok'; toast.textContent=m; }
+  function info(m){ toast.className='toast muted'; toast.textContent=m; }
+  function err(m){ toast.className='toast err'; toast.textContent=m; }
 
-  const toJSON = arr => JSON.stringify(arr || []);
-  const fromUnknown = v => {
+  function toJSON(arr){ return JSON.stringify(arr || []); }
+  function fromUnknown(v){
     if (v == null || v === '') return [];
     if (Array.isArray(v)) return v.map(String);
-    try { const j = JSON.parse(v); return Array.isArray(j) ? j : [String(j)]; } catch {}
-    if (String(v).includes(',')) return String(v).split(',').map(s=>s.trim()).filter(Boolean);
+    try { var j = JSON.parse(v); return Array.isArray(j) ? j : [String(j)]; } catch(e){}
+    if (String(v).includes(',')) return String(v).split(',').map(function(s){ return s.trim(); }).filter(Boolean);
     return [String(v)];
-  };
-  const apply = values => {
-    const set = new Set((values||[]).map(String));
-    inputs.forEach(cb => cb.checked = set.has(cb.value));
-  };
-  const collect = () => inputs.filter(i=>i.checked).map(i=>i.value);
-
-  // ===== сверхнадёжное определение DEAL_ID =====
-  function getFromQS(sp) {
-    return sp.get('deal') || sp.get('id') || sp.get('ID') || sp.get('deal_id') || '';
   }
-  function detectDealId() {
-    // 1) query-параметры нашей страницы (?deal=#ID# — если когда-то добавим)
-    const qs = new URLSearchParams(location.search);
-    let id = getFromQS(qs);
-    if (id) return id;
+  function apply(values){
+    var set = new Set((values||[]).map(String));
+    inputs.forEach(function(cb){ cb.checked = set.has(cb.value); });
+  }
+  function collect(){
+    return inputs.filter(function(i){ return i.checked; }).map(function(i){ return i.value; });
+  }
 
-    // 2) hash (#deal=123)
-    const hs = new URLSearchParams(location.hash.replace(/^#/, ''));
-    id = getFromQS(hs);
-    if (id) return id;
+  // ===== Надёжное определение DEAL_ID (с приоритетом hash) =====
+  function getIdFromSearchParams(sp){
+    return sp.get('deal') || sp.get('id') || sp.get('ID') || sp.get('deal_id') || sp.get('DEAL_ID') || '';
+  }
+  function detectDealId(){
+    // 1) HASH нашей страницы: #deal=123, #id=123, #DEAL_ID=123, #entityId=DEAL_123, просто цифры
+    var hashString = location.hash ? location.hash.substring(1) : '';
+    var hs = new URLSearchParams(hashString);
+    var id = getIdFromSearchParams(hs);
+    if (!id) {
+      var entity = hs.get('entityId') || hs.get('ENTITY_ID');
+      if (entity) {
+        var mE = String(entity).match(/DEAL[_-]?(\d+)/i);
+        if (mE) id = mE[1];
+      }
+    }
+    if (!id) {
+      var mN = hashString.match(/(\d{3,})/);
+      if (mN) id = mN[1];
+    }
+    if (id) return String(id);
 
-    // 3) document.referrer: query
+    // 2) Query нашей страницы на всякий
+    var qs = new URLSearchParams(location.search);
+    id = getIdFromSearchParams(qs);
+    if (id) return String(id);
+
+    // 3) Имя файла: /index-123.html
+    var mPath = location.pathname.match(/index[-_](\d+)\.html$/i);
+    if (mPath) return mPath[1];
+
+    // 4) document.referrer (если не отрезан)
     try {
-      const ref = document.referrer || '';
+      var ref = document.referrer || '';
       if (ref) {
-        const u = new URL(ref);
-        const q = new URLSearchParams(u.search);
-        id = getFromQS(q);
-        if (id) return id;
-
-        // 4) document.referrer: path /crm/deal/details/123/
-        const m1 = u.pathname.match(/\/crm\/deal\/(?:details|show)\/(\d+)\//i);
+        var u = new URL(ref);
+        var q = u.searchParams;
+        id = getIdFromSearchParams(q);
+        if (id) return String(id);
+        var m1 = u.pathname.match(/\/crm\/deal\/(?:details|show)\/(\d+)\//i);
         if (m1) return m1[1];
-
-        // 5) entityId=DEAL_123
-        const ent = q.get('entityId');
+        var ent = q.get('entityId');
         if (ent) {
-          const m2 = String(ent).match(/DEAL[_-]?(\d+)/i);
+          var m2 = String(ent).match(/DEAL[_-]?(\d+)/i);
           if (m2) return m2[1];
         }
-
-        // 6) грубый поиск в полной строке
-        const m3 = ref.match(/deal[_-]?id=(\d+)/i);
+        var m3 = ref.match(/deal[_-]?id=(\d+)/i);
         if (m3) return m3[1];
       }
-    } catch {}
-
-    // 7) иногда Bitrix кладёт JSON в window.name
-    try {
-      const wn = (window.name || '').trim();
-      if (wn.startsWith('{') || wn.startsWith('[')) {
-        const obj = JSON.parse(wn);
-        const cand = obj.deal || obj.id || obj.ID || obj.deal_id;
-        if (cand) return String(cand);
-      }
-    } catch {}
+    } catch(e){}
 
     return '';
   }
 
-  let DEAL_ID = detectDealId();
-  const haveID = () => !!DEAL_ID;
-
-  async function apiGet() {
-    if (!haveID()) return { ok:false, error:'no_deal_id' };
-    const r = await fetch(`/api/deal-field?deal=${encodeURIComponent(DEAL_ID)}&field=${encodeURIComponent(FIELD_CODE)}`);
-    return r.json();
+  // ===== Поле (можно передать в hash: #field=UF_CRM_XXXX) =====
+  function detectFieldCode(){
+    var hashString = location.hash ? location.hash.substring(1) : '';
+    var hs = new URLSearchParams(hashString);
+    var f = hs.get('field') || '';
+    if (f) return f;
+    var qs = new URLSearchParams(location.search);
+    f = qs.get('field') || '';
+    return f || DEFAULT_FIELD;
   }
-  async function apiSet(value) {
-    if (!haveID()) return { ok:false, error:'no_deal_id' };
-    const r = await fetch('/api/deal-field', {
+
+  var DEAL_ID = detectDealId();
+  var FIELD_CODE = detectFieldCode();
+
+  function haveID(){ return !!DEAL_ID; }
+
+  // ——— API
+  function apiGet(){
+    if (!haveID()) return Promise.resolve({ ok:false, error:'no_deal_id' });
+    return fetch('/api/deal-field?deal=' + encodeURIComponent(DEAL_ID) + '&field=' + encodeURIComponent(FIELD_CODE))
+      .then(function(r){ return r.json(); });
+  }
+  function apiSet(value){
+    if (!haveID()) return Promise.resolve({ ok:false, error:'no_deal_id' });
+    return fetch('/api/deal-field', {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ deal: DEAL_ID, field: FIELD_CODE, value })
-    });
-    return r.json();
+      body: JSON.stringify({ deal: DEAL_ID, field: FIELD_CODE, value: value })
+    }).then(function(r){ return r.json(); });
   }
 
-  async function load() {
-    if (!haveID()) {
-      // ID не удалось добыть => Bitrix режет referrer до origin.
-      // UI остаётся рабочим (без ошибок), но сохранение отключаем.
+  // ——— Загрузка и сохранение
+  function load(){
+    if (!haveID()){
       saveBtn.disabled = true;
       hint.style.display = 'block';
-      hint.innerHTML = 'Не удалось определить ID сделки из Bitrix (реферер скрыт). ' +
-        'Для сохранения добавьте в URL вкладки параметр <b>?deal=#ID#</b> ' +
-        'или разрешите реферер в настройках портала.';
+      hint.innerHTML = 'ID сделки не найден. Используйте URL вида <b>#deal=#ID#</b> (и при необходимости <b>&field=UF_CRM_…</b>).';
       return;
     }
-
-    // теперь можно грузить/сохранять
     saveBtn.disabled = false;
-
-    try {
-      const data = await apiGet();
-      if (data.ok) {
+    apiGet().then(function(data){
+      if (data && data.ok) {
         apply(fromUnknown(data.value));
         info('Загружено.');
       } else {
-        // поле пустое — это не ошибка
-        info('');
+        info(''); // поле пустое — нормально
       }
-    } catch {
-      info('');
-    }
+    }).catch(function(){ info(''); });
   }
 
-  async function save() {
-    if (!haveID()) return; // safety
-    const payload = toJSON(collect());
-    try {
-      const data = await apiSet(payload);
-      if (data.ok) ok('Сохранено');
-      else err('Не удалось сохранить: ' + (data.error || 'unknown_error'));
-    } catch {
-      err('Ошибка сети');
-    }
-  }
-
-  // автосохранение только после того, как ID найден
-  let t;
-  const autoSave = () => {
+  function save(){
     if (!haveID()) return;
-    clearTimeout(t); t = setTimeout(save, AUTOSAVE_MS);
-  };
-  inputs.forEach(cb => cb.addEventListener('change', autoSave));
+    var payload = toJSON(collect());
+    apiSet(payload).then(function(data){
+      if (data && data.ok) ok('Сохранено');
+      else err('Не удалось сохранить: ' + (data && data.error ? data.error : 'unknown_error'));
+    }).catch(function(){ err('Ошибка сети'); });
+  }
+
+  // ——— Автосохранение (дебаунс)
+  var t = null;
+  function autoSave(){
+    if (!haveID()) return;
+    if (t) clearTimeout(t);
+    t = setTimeout(save, 600);
+  }
+
+  inputs.forEach(function(cb){ cb.addEventListener('change', autoSave); });
   saveBtn.addEventListener('click', save);
 
+  // Старт
   load();
 })();
 </script>
