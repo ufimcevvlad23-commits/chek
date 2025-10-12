@@ -8,34 +8,19 @@
     :root{ --bg:#fff; --card:#fff; --muted:#6b7280; --ok:#0a7f2e; --err:#c00; --accent:#2fc6f6; --border:#e5e7eb; }
     *{ box-sizing:border-box }
     html,body{ height:100% }
-    body{
-      margin:0; padding:20px; background:var(--bg);
-      font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      color:#111827;
-    }
-    .card{
-      max-width:720px; margin:0 auto; background:var(--card);
-      border:1px solid var(--border); border-radius:16px; padding:20px;
-      box-shadow:0 4px 16px rgba(0,0,0,.04);
-    }
+    body{ margin:0; padding:20px; background:var(--bg); font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; color:#111827; }
+    .card{ max-width:720px; margin:0 auto; background:var(--card); border:1px solid var(--border); border-radius:16px; padding:20px; box-shadow:0 4px 16px rgba(0,0,0,.04); }
     h1{ margin:0 0 12px 0; font-size:18px }
     .sub{ color:var(--muted); margin-bottom:16px }
-    .grid{
-      display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:10px 16px;
-      margin-top:8px;
-    }
+    .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:10px 16px; margin-top:8px; }
     label{ display:flex; align-items:flex-start; gap:10px; cursor:pointer; user-select:none }
     input[type="checkbox"]{ margin-top:2px; width:18px; height:18px }
     .row{ margin-top:16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap }
-    .btn{
-      background:var(--accent); color:#fff; border:0; padding:10px 16px; border-radius:10px; cursor:pointer;
-      font-weight:600;
-    }
+    .btn{ background:var(--accent); color:#fff; border:0; padding:10px 16px; border-radius:10px; cursor:pointer; font-weight:600; }
     .btn:disabled{ opacity:.6; cursor:not-allowed }
-    .muted{ color:var(--muted) }
-    .ok{ color:var(--ok) }
-    .err{ color:var(--err) }
+    .muted{ color:var(--muted) } .ok{ color:var(--ok) } .err{ color:var(--err) }
     .toast{ min-height:20px }
+    .hint{ font-size:12px; color:var(--muted); margin-top:6px }
   </style>
 </head>
 <body>
@@ -62,19 +47,20 @@
     </div>
 
     <div class="row">
-      <button id="saveBtn" class="btn">💾 Сохранить</button>
+      <button id="saveBtn" class="btn" disabled>💾 Сохранить</button>
       <span id="toast" class="toast muted"></span>
     </div>
+    <div id="hint" class="hint" style="display:none"></div>
   </div>
 
 <script>
 (() => {
-  // === настройки ===
-  const FIELD_CODE = 'UF_CRM_CHECKLIST'; // код пользовательского поля сделки (тип "Строка", туда кладём JSON)
+  const FIELD_CODE = 'UF_CRM_CHECKLIST';   // код поля-СТРОКИ (храним JSON-массив)
   const AUTOSAVE_MS = 600;
 
   const toast = document.getElementById('toast');
   const saveBtn = document.getElementById('saveBtn');
+  const hint = document.getElementById('hint');
   const inputs = Array.from(document.querySelectorAll('#list input[type="checkbox"]'));
 
   const ok  = m => { toast.className='toast ok'; toast.textContent=m; };
@@ -89,43 +75,76 @@
     if (String(v).includes(',')) return String(v).split(',').map(s=>s.trim()).filter(Boolean);
     return [String(v)];
   };
-
   const apply = values => {
     const set = new Set((values||[]).map(String));
     inputs.forEach(cb => cb.checked = set.has(cb.value));
   };
   const collect = () => inputs.filter(i=>i.checked).map(i=>i.value);
 
-  // Тихо определяем ID сделки по referrer
+  // ===== сверхнадёжное определение DEAL_ID =====
+  function getFromQS(sp) {
+    return sp.get('deal') || sp.get('id') || sp.get('ID') || sp.get('deal_id') || '';
+  }
   function detectDealId() {
+    // 1) query-параметры нашей страницы (?deal=#ID# — если когда-то добавим)
+    const qs = new URLSearchParams(location.search);
+    let id = getFromQS(qs);
+    if (id) return id;
+
+    // 2) hash (#deal=123)
+    const hs = new URLSearchParams(location.hash.replace(/^#/, ''));
+    id = getFromQS(hs);
+    if (id) return id;
+
+    // 3) document.referrer: query
     try {
       const ref = document.referrer || '';
-      if (!ref) return null;
-      const u = new URL(ref);
-      const q = u.searchParams;
-      const byQ = q.get('deal_id') || q.get('ID') || q.get('id');
-      if (byQ) return String(byQ);
-      const m1 = u.pathname.match(/\/crm\/deal\/(?:details|show)\/(\d+)\//i);
-      if (m1) return m1[1];
-      const entity = q.get('entityId'); // entityId=DEAL_123
-      if (entity) {
-        const m2 = String(entity).match(/DEAL[_-]?(\d+)/i);
-        if (m2) return m2[1];
+      if (ref) {
+        const u = new URL(ref);
+        const q = new URLSearchParams(u.search);
+        id = getFromQS(q);
+        if (id) return id;
+
+        // 4) document.referrer: path /crm/deal/details/123/
+        const m1 = u.pathname.match(/\/crm\/deal\/(?:details|show)\/(\d+)\//i);
+        if (m1) return m1[1];
+
+        // 5) entityId=DEAL_123
+        const ent = q.get('entityId');
+        if (ent) {
+          const m2 = String(ent).match(/DEAL[_-]?(\d+)/i);
+          if (m2) return m2[1];
+        }
+
+        // 6) грубый поиск в полной строке
+        const m3 = ref.match(/deal[_-]?id=(\d+)/i);
+        if (m3) return m3[1];
       }
-      const m3 = ref.match(/deal[_-]?id=(\d+)/i);
-      if (m3) return m3[1];
-      return null;
-    } catch { return null; }
+    } catch {}
+
+    // 7) иногда Bitrix кладёт JSON в window.name
+    try {
+      const wn = (window.name || '').trim();
+      if (wn.startsWith('{') || wn.startsWith('[')) {
+        const obj = JSON.parse(wn);
+        const cand = obj.deal || obj.id || obj.ID || obj.deal_id;
+        if (cand) return String(cand);
+      }
+    } catch {}
+
+    return '';
   }
-  const DEAL_ID = detectDealId(); // если не нашли — UI работает, но писать не будет
+
+  let DEAL_ID = detectDealId();
+  const haveID = () => !!DEAL_ID;
 
   async function apiGet() {
-    if (!DEAL_ID) return { ok:false };
+    if (!haveID()) return { ok:false, error:'no_deal_id' };
     const r = await fetch(`/api/deal-field?deal=${encodeURIComponent(DEAL_ID)}&field=${encodeURIComponent(FIELD_CODE)}`);
     return r.json();
   }
   async function apiSet(value) {
-    if (!DEAL_ID) return { ok:false, error:"no_deal_id" };
+    if (!haveID()) return { ok:false, error:'no_deal_id' };
     const r = await fetch('/api/deal-field', {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
@@ -135,28 +154,52 @@
   }
 
   async function load() {
+    if (!haveID()) {
+      // ID не удалось добыть => Bitrix режет referrer до origin.
+      // UI остаётся рабочим (без ошибок), но сохранение отключаем.
+      saveBtn.disabled = true;
+      hint.style.display = 'block';
+      hint.innerHTML = 'Не удалось определить ID сделки из Bitrix (реферер скрыт). ' +
+        'Для сохранения добавьте в URL вкладки параметр <b>?deal=#ID#</b> ' +
+        'или разрешите реферер в настройках портала.';
+      return;
+    }
+
+    // теперь можно грузить/сохранять
+    saveBtn.disabled = false;
+
     try {
       const data = await apiGet();
-      if (data && data.ok) {
+      if (data.ok) {
         apply(fromUnknown(data.value));
         info('Загружено.');
       } else {
-        info(''); // поле пустое — просто тихо показываем пустой чек-лист
+        // поле пустое — это не ошибка
+        info('');
       }
-    } catch { info(''); }
+    } catch {
+      info('');
+    }
   }
 
   async function save() {
-    const payload = toJSON(collect()); // JSON-строка массива
+    if (!haveID()) return; // safety
+    const payload = toJSON(collect());
     try {
       const data = await apiSet(payload);
       if (data.ok) ok('Сохранено');
-      else err('Не удалось сохранить');
-    } catch { err('Ошибка сети'); }
+      else err('Не удалось сохранить: ' + (data.error || 'unknown_error'));
+    } catch {
+      err('Ошибка сети');
+    }
   }
 
-  // автосохранение
-  let t; const autoSave = () => { clearTimeout(t); t = setTimeout(save, AUTOSAVE_MS); };
+  // автосохранение только после того, как ID найден
+  let t;
+  const autoSave = () => {
+    if (!haveID()) return;
+    clearTimeout(t); t = setTimeout(save, AUTOSAVE_MS);
+  };
   inputs.forEach(cb => cb.addEventListener('change', autoSave));
   saveBtn.addEventListener('click', save);
 
