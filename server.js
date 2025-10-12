@@ -15,22 +15,21 @@ app.use((req, res, next) => {
   next();
 });
 
-// ---------- ВСПОМОГАТЕЛЬНОЕ: fetch с таймаутом ----------
-async function fetchWithTimeout(url, opts = {}, ms = 5000) {
+// helper: fetch с таймаутом
+async function fetchWithTimeout(url, opts = {}, ms = 7000) {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), ms);
   try {
-    const r = await fetch(url, { ...opts, signal: controller.signal });
-    return r;
+    return await fetch(url, { ...opts, signal: controller.signal });
   } finally {
     clearTimeout(t);
   }
 }
 
-// ---------- API: чтение поля сделки ----------
+// --- API: прочитать значение поля сделки ---
 app.get("/api/deal-field", async (req, res) => {
   try {
-    const base = process.env.BITRIX_WEBHOOK_URL;
+    const base = process.env.BITRIX_WEBHOOK_URL; // https://<portal>/rest/<user>/<token>/
     const { deal, field } = req.query || {};
     if (!deal || !field) return res.status(400).json({ ok: false, error: "deal and field are required" });
     if (!base) return res.status(200).json({ ok: false, error: "BITRIX_WEBHOOK_URL not set" });
@@ -38,7 +37,7 @@ app.get("/api/deal-field", async (req, res) => {
     const url = new URL(base.replace(/\/$/, "/") + "crm.deal.get.json");
     url.searchParams.set("id", String(deal));
 
-    const r = await fetchWithTimeout(url.toString(), { method: "GET" }, 7000);
+    const r = await fetchWithTimeout(url.toString(), { method: "GET" });
     const data = await r.json().catch(() => ({}));
     const value = data?.result?.[field] ?? null;
 
@@ -49,7 +48,7 @@ app.get("/api/deal-field", async (req, res) => {
   }
 });
 
-// ---------- API: запись поля сделки ----------
+// --- API: записать значение поля сделки (JSON-строка) ---
 app.post("/api/deal-field", async (req, res) => {
   try {
     const base = process.env.BITRIX_WEBHOOK_URL;
@@ -57,12 +56,21 @@ app.post("/api/deal-field", async (req, res) => {
     if (!deal || !field) return res.status(400).json({ ok: false, error: "deal and field are required" });
     if (!base) return res.status(200).json({ ok: false, error: "BITRIX_WEBHOOK_URL not set" });
 
-    const url = new URL(base.replace(/\/$/, "/") + "crm.deal.update.json");
-    const fields = {}; fields[field] = value; // пишем строку JSON/CSV — как приходит из фронта
-    url.searchParams.set("id", String(deal));
-    url.searchParams.set("fields", JSON.stringify(fields));
+    const url = base.replace(/\/$/, "/") + "crm.deal.update.json";
 
-    const r = await fetchWithTimeout(url.toString(), { method: "POST" }, 7000);
+    const fields = {};               // пишем как строку JSON
+    fields[field] = value;           // пример: '["Копия паспорта","Копия СНИЛС"]'
+
+    // Bitrix любит x-www-form-urlencoded в ТЕЛЕ
+    const form = new URLSearchParams();
+    form.set("id", String(deal));
+    form.set("fields", JSON.stringify(fields));
+
+    const r = await fetchWithTimeout(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: form.toString()
+    });
     const data = await r.json().catch(() => ({}));
 
     if (data?.result === true) return res.json({ ok: true });
@@ -73,12 +81,11 @@ app.post("/api/deal-field", async (req, res) => {
   }
 });
 
-// ---------- Статика + index.html на ЛЮБОЙ метод (важно для Bitrix POST) ----------
+// --- статика + index.html на ЛЮБОЙ метод (Bitrix часто шлёт POST) ---
 app.use(express.static(path.join(__dirname), {
   extensions: ["html"],
   setHeaders: (res) => res.setHeader("Cache-Control", "no-store"),
 }));
-
 const indexPath = path.join(__dirname, "index.html");
 app.all("/", (_req, res) => res.sendFile(indexPath));
 app.all(/^\/(?!api\/).*/, (_req, res) => res.sendFile(indexPath));
