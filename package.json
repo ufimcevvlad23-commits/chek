@@ -2,12 +2,9 @@
   "name": "chek",
   "version": "1.0.0",
   "private": true,
-  "scripts": {
-    "start": "node server.js",
-    "dev": "vercel dev"
-  },
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": "20.x" },
   "dependencies": {
-    "express": "^4.19.2",
-    "node-fetch": "^3.3.2"
+    "express": "^4.19.2"
   }
 }
