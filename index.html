@@ -2,169 +2,171 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <title>Чек-лист сделки</title>
+  <title>Чек-лист</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root { --primary:#2fc6f6; --muted:#666; --ok:#0a7f2e; --err:#c00; }
-    body{font-family:system-ui,Arial,sans-serif;margin:16px}
-    .item{margin:6px 0}
-    .row{margin:8px 0}
-    .small{font-size:12px;color:var(--muted)}
-    #saveBtn{margin-top:12px;padding:10px 16px;border:0;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer}
-    .ok{color:var(--ok)} .err{color:var(--err)} .muted{color:var(--muted)}
+    :root{ --bg:#fff; --card:#fff; --muted:#6b7280; --ok:#0a7f2e; --err:#c00; --accent:#2fc6f6; --border:#e5e7eb; }
+    *{ box-sizing:border-box }
+    html,body{ height:100% }
+    body{
+      margin:0; padding:20px; background:var(--bg);
+      font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color:#111827;
+    }
+    .card{
+      max-width:720px; margin:0 auto; background:var(--card);
+      border:1px solid var(--border); border-radius:16px; padding:20px;
+      box-shadow:0 4px 16px rgba(0,0,0,.04);
+    }
+    h1{ margin:0 0 12px 0; font-size:18px }
+    .sub{ color:var(--muted); margin-bottom:16px }
+    .grid{
+      display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:10px 16px;
+      margin-top:8px;
+    }
+    label{ display:flex; align-items:flex-start; gap:10px; cursor:pointer; user-select:none }
+    input[type="checkbox"]{ margin-top:2px; width:18px; height:18px }
+    .row{ margin-top:16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap }
+    .btn{
+      background:var(--accent); color:#fff; border:0; padding:10px 16px; border-radius:10px; cursor:pointer;
+      font-weight:600;
+    }
+    .btn:disabled{ opacity:.6; cursor:not-allowed }
+    .muted{ color:var(--muted) }
+    .ok{ color:var(--ok) }
+    .err{ color:var(--err) }
+    .toast{ min-height:20px }
   </style>
 </head>
 <body>
-  <div id="state" class="muted">Загрузка…</div>
+  <div class="card">
+    <h1>Чек-лист документов</h1>
+    <div id="subtitle" class="sub">Отметьте полученные документы и нажмите «Сохранить».</div>
 
-  <div id="content" style="display:none">
-    <div class="row small">
-      Сделка: <span id="dealLabel">—</span> • Поле: <span id="fieldLabel">—</span>
+    <div class="grid" id="list">
+      <label><input type="checkbox" value="Копия паспорта"><span>Копия паспорта</span></label>
+      <label><input type="checkbox" value="Копия СНИЛС"><span>Копия СНИЛС</span></label>
+      <label><input type="checkbox" value="Копия ИНН"><span>Копия ИНН</span></label>
+      <label><input type="checkbox" value="Копия свидетельства о браке/расторжении"><span>Копия свидетельства о браке/расторжении</span></label>
+      <label><input type="checkbox" value="Копия выписки из ЭТК"><span>Копия выписки из ЭТК</span></label>
+      <label><input type="checkbox" value="Копия лицевого счета"><span>Копия лицевого счета</span></label>
+      <label><input type="checkbox" value="Копия справки 2-НДФЛ"><span>Копия справки 2-НДФЛ</span></label>
+      <label><input type="checkbox" value="Копия справки об отсутствии судимости"><span>Копия справки об отсутствии судимости</span></label>
+      <label><input type="checkbox" value="Копия справки об отсутствии статуса ИП"><span>Копия справки об отсутствии статуса ИП</span></label>
+      <label><input type="checkbox" value="Копия квитанции о депозите суда"><span>Копия квитанции о депозите суда</span></label>
+      <label><input type="checkbox" value="Копия квитанции о направлении заявления"><span>Копия квитанции о направлении заявления</span></label>
+      <label><input type="checkbox" value="Копия доверенности на представителя"><span>Копия доверенности на представителя</span></label>
+      <label><input type="checkbox" value="Копия выписки из ОКБ/НБКИ"><span>Копия выписки из ОКБ/НБКИ</span></label>
+      <label><input type="checkbox" value="Копия выписки по счетам"><span>Копия выписки по счетам</span></label>
+      <label><input type="checkbox" value="Копия брачного договора"><span>Копия брачного договора</span></label>
     </div>
 
-    <!-- чекбоксы -->
-    <div class="item"><input type="checkbox" value="Копия паспорта"> Копия паспорта</div>
-    <div class="item"><input type="checkbox" value="Копия СНИЛС"> Копия СНИЛС</div>
-    <div class="item"><input type="checkbox" value="Копия ИНН"> Копия ИНН</div>
-    <div class="item"><input type="checkbox" value="Копия свидетельства о браке/расторжении"> Копия свидетельства о браке/расторжении</div>
-    <div class="item"><input type="checkbox" value="Копия выписки из ЭТК"> Копия выписки из ЭТК</div>
-    <div class="item"><input type="checkbox" value="Копия лицевого счета"> Копия лицевого счета</div>
-    <div class="item"><input type="checkbox" value="Копия справки 2-НДФЛ"> Копия справки 2-НДФЛ</div>
-    <div class="item"><input type="checkbox" value="Копия справки об отсутствии судимости"> Копия справки об отсутствии судимости</div>
-    <div class="item"><input type="checkbox" value="Копия справки об отсутствии статуса ИП"> Копия справки об отсутствии статуса ИП</div>
-    <div class="item"><input type="checkbox" value="Копия квитанции о депозите суда"> Копия квитанции о депозите суда</div>
-    <div class="item"><input type="checkbox" value="Копия квитанции о направлении заявления"> Копия квитанции о направлении заявления</div>
-    <div class="item"><input type="checkbox" value="Копия доверенности на представителя"> Копия доверенности на представителя</div>
-    <div class="item"><input type="checkbox" value="Копия выписки из ОКБ/НБКИ"> Копия выписки из ОКБ/НБКИ</div>
-    <div class="item"><input type="checkbox" value="Копия выписки по счетам"> Копия выписки по счетам</div>
-    <div class="item"><input type="checkbox" value="Копия брачного договора"> Копия брачного договора</div>
-
-    <button id="saveBtn">💾 Сохранить</button>
-    <div id="status" class="row small muted"></div>
+    <div class="row">
+      <button id="saveBtn" class="btn">💾 Сохранить</button>
+      <span id="toast" class="toast muted"></span>
+    </div>
   </div>
 
 <script>
-(function () {
-  // ===== настройки =====
-  const DEFAULT_FIELD = 'UF_CRM_CHECKLIST'; // ваш UF_код по умолчанию
-  // =====================
+(() => {
+  // === настройки ===
+  const FIELD_CODE = 'UF_CRM_CHECKLIST'; // код пользовательского поля сделки (тип "Строка")
+  const AUTOSAVE_MS = 600;               // дебаунс автосохранения
 
-  // --- утилиты ---
-  const $ = sel => document.querySelector(sel);
-  const $$ = sel => Array.from(document.querySelectorAll(sel));
-  const debounce = (fn, ms) => {
-    let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); };
-  };
-  const parseValue = (v) => {
+  const toast = document.getElementById('toast');
+  const saveBtn = document.getElementById('saveBtn');
+  const inputs = Array.from(document.querySelectorAll('#list input[type="checkbox"]'));
+
+  // ——— утилиты
+  const ok = m => { toast.className='toast ok'; toast.textContent=m; };
+  const info = m => { toast.className='toast muted'; toast.textContent=m; };
+  const err = m => { toast.className='toast err'; toast.textContent=m; };
+
+  // JSON ⇄ массив
+  const toJSON = arr => JSON.stringify(arr || []);
+  const fromUnknown = v => {
     if (v == null || v === '') return [];
     if (Array.isArray(v)) return v.map(String);
-    try { const j = JSON.parse(v); return Array.isArray(j) ? j : [String(j)]; } catch(_){}
+    try { const j = JSON.parse(v); return Array.isArray(j) ? j : [String(j)]; } catch {}
     if (String(v).includes(',')) return String(v).split(',').map(s=>s.trim()).filter(Boolean);
     return [String(v)];
   };
-  const stringify = arr => JSON.stringify(arr || []);
 
-  // --- определяем DEAL_ID и FIELD ---
-  const params = new URLSearchParams(location.search);
-  let DEAL_ID = params.get('deal') || '';
-  const FIELD   = params.get('field') || DEFAULT_FIELD;
+  // отмечаем галочки из массива
+  const apply = values => {
+    const set = new Set((values||[]).map(String));
+    inputs.forEach(cb => cb.checked = set.has(cb.value));
+  };
 
-  function detectDealIdFromReferrer() {
+  // собираем выбранные
+  const collect = () => inputs.filter(i=>i.checked).map(i=>i.value);
+
+  // «тихое» определение ID сделки из referrer
+  function detectDealId() {
     try {
       const ref = document.referrer || '';
-      if (!ref) return '';
+      if (!ref) return null;
       const u = new URL(ref);
       const q = u.searchParams;
       const byQ = q.get('deal_id') || q.get('ID') || q.get('id');
       if (byQ) return String(byQ);
       const m1 = u.pathname.match(/\/crm\/deal\/(?:details|show)\/(\d+)\//i);
       if (m1) return m1[1];
-      const ent = q.get('entityId');                     // entityId=DEAL_123
-      if (ent) { const m2 = String(ent).match(/DEAL[_-]?(\d+)/i); if (m2) return m2[1]; }
+      const entity = q.get('entityId'); // entityId=DEAL_123
+      if (entity) {
+        const m2 = String(entity).match(/DEAL[_-]?(\d+)/i);
+        if (m2) return m2[1];
+      }
       const m3 = ref.match(/deal[_-]?id=(\d+)/i);
       if (m3) return m3[1];
-      return '';
-    } catch { return ''; }
-  }
-  if (!DEAL_ID) DEAL_ID = detectDealIdFromReferrer();
-
-  // если не нашли — показываем понятную подсказку и выходим
-  if (!DEAL_ID) {
-    document.body.innerHTML =
-      '<div style="margin:16px;color:#444">Не удалось определить ID сделки. ' +
-      'Добавьте в URL параметр <b>?deal=#ID#</b> (или разместите виджет внутри карточки сделки).</div>';
-    return;
+      return null;
+    } catch { return null; }
   }
 
-  // --- элементы ---
-  const state = $('#state');
-  const content = $('#content');
-  const dealLabel = $('#dealLabel');
-  const fieldLabel = $('#fieldLabel');
-  const statusEl = $('#status');
-  const saveBtn = $('#saveBtn');
+  const DEAL_ID = detectDealId(); // может быть null — тогда просто UI без записи
 
-  dealLabel.textContent = DEAL_ID;
-  fieldLabel.textContent = FIELD;
-
-  // --- работа с чекбоксами ---
-  const getValues = () => $$('input[type="checkbox"]').filter(i=>i.checked).map(i=>i.value);
-  const setValues = (arr) => {
-    const set = new Set((arr||[]).map(String));
-    $$('input[type="checkbox"]').forEach(cb => cb.checked = set.has(cb.value));
-  };
-
-  async function apiGet() {
-    const url = `/api/deal-field?deal=${encodeURIComponent(DEAL_ID)}&field=${encodeURIComponent(FIELD)}`;
-    const r = await fetch(url, { method:'GET' });
-    return r.json();
-  }
-  async function apiSet(value) {
-    const r = await fetch('/api/deal-field', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify({ deal: DEAL_ID, field: FIELD, value })
-    });
-    return r.json();
-  }
-
-  async function load() {
+  async function readField() {
+    if (!DEAL_ID) { info(''); return; } // молчим — UI пустой
     try {
-      state.textContent = 'Загружаю поле сделки…';
-      const data = await apiGet();
-      if (data.ok) {
-        setValues(parseValue(data.value));
-        state.textContent = 'Загружено.';
+      const url = `/api/deal-field?deal=${encodeURIComponent(DEAL_ID)}&field=${encodeURIComponent(FIELD_CODE)}`;
+      const r = await fetch(url);
+      const data = await r.json();
+      if (data && data.ok) {
+        apply(fromUnknown(data.value));
+        info('Загружено.');
       } else {
-        // поле пока пустое или нет доступа — это не ошибка UI
-        state.textContent = 'Поле пусто или не заполнено. Можете отметить и сохранить.';
+        // поле пустое — оставляем чек-лист пустым
+        info('');
       }
-    } catch (e) {
-      state.textContent = 'Не удалось прочитать поле. Попробуйте сохранить — оно создастся.';
+    } catch {
+      // сеть/сервер не мешают UI — просто не показываем ошибок
+      info('');
     }
-    state.style.display = 'none';
-    content.style.display = 'block';
   }
 
-  async function save() {
+  async function writeField(values) {
+    if (!DEAL_ID) return; // если ID не найден — ничего не пишем
     try {
-      statusEl.textContent = 'Сохраняю…';
-      const payload = stringify(getValues());           // пишем JSON-строку в поле (тип "Строка")
-      const data = await apiSet(payload);
-      if (data.ok) statusEl.innerHTML = '<span class="ok">Сохранено</span>';
-      else statusEl.innerHTML = '<span class="err">Ошибка: ' + (data.error || 'save_failed') + '</span>';
-    } catch (e) {
-      statusEl.innerHTML = '<span class="err">Ошибка сети</span>';
-    }
+      const r = await fetch('/api/deal-field', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ deal: DEAL_ID, field: FIELD_CODE, value: toJSON(values) })
+      });
+      const data = await r.json();
+      if (data && data.ok) ok('Сохранено');
+      else err('Не удалось сохранить');
+    } catch { err('Ошибка сети'); }
   }
 
   // автосохранение с дебаунсом
-  const autoSave = debounce(save, 600);
-  $$('input[type="checkbox"]').forEach(cb => cb.addEventListener('change', autoSave));
-  saveBtn.addEventListener('click', save);
+  let t; const autoSave = () => {
+    clearTimeout(t); t = setTimeout(() => writeField(collect()), AUTOSAVE_MS);
+  };
+  inputs.forEach(cb => cb.addEventListener('change', autoSave));
+  saveBtn.addEventListener('click', () => writeField(collect()));
 
   // старт
-  load();
+  readField();
 })();
 </script>
 </body>
