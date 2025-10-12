@@ -1,59 +1,25 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>📋 Чек-лист документов</title>
+  <meta charset="utf-8" />
+  <title>Чек-лист сделки</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 30px;
-      background-color: #f4f6f8;
-    }
-    h2 {
-      color: #333;
-      margin-bottom: 20px;
-    }
-    #checklist {
-      background: #fff;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      width: 480px;
-    }
-    .item {
-      margin-bottom: 10px;
-      font-size: 15px;
-      display: flex;
-      align-items: center;
-    }
-    input[type="checkbox"] {
-      margin-right: 10px;
-      transform: scale(1.2);
-    }
-    button {
-      margin-top: 15px;
-      background: #0d6efd;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 15px;
-    }
-    button:hover {
-      background: #0b5ed7;
-    }
-    .status {
-      margin-top: 15px;
-      font-weight: bold;
-      color: #555;
-    }
+    body{font-family:system-ui,Arial,sans-serif;margin:16px}
+    .item{margin:6px 0}
+    #saveBtn{margin-top:12px;padding:10px 16px;border:0;border-radius:8px;background:#2fc6f6;color:#fff;cursor:pointer}
+    .muted{color:#666}
+    .ok{color:#0a7f2e}
+    .err{color:#c00}
   </style>
+  <script src="https://api.bitrix24.com/api/v1/"></script>
 </head>
 <body>
-  <h2>📋 Чек-лист документов</h2>
-  <div id="checklist">
+  <div id="state" class="muted">Инициализация…</div>
+
+  <div id="content" style="display:none">
+    <div class="muted" id="dealInfo">Сделка —</div>
+
     <div class="item"><input type="checkbox" value="Копия паспорта"> Копия паспорта</div>
     <div class="item"><input type="checkbox" value="Копия СНИЛС"> Копия СНИЛС</div>
     <div class="item"><input type="checkbox" value="Копия ИНН"> Копия ИНН</div>
@@ -69,99 +35,79 @@
     <div class="item"><input type="checkbox" value="Копия выписки из ОКБ/НБКИ"> Копия выписки из ОКБ/НБКИ</div>
     <div class="item"><input type="checkbox" value="Копия выписки по счетам"> Копия выписки по счетам</div>
     <div class="item"><input type="checkbox" value="Копия брачного договора"> Копия брачного договора</div>
+
     <button id="saveBtn">💾 Сохранить</button>
-    <div class="status" id="status"></div>
+    <div id="status" class="muted" style="margin-top:8px"></div>
   </div>
 
-  <script>
-    // === ⚙️ Настройки ===
-    const webhook = "https://nta-company.bitrix24.ru/rest/56435/tkhvw3wzcpj80s54/"; // твой вебхук
-    const fieldCode = "UF_CRM_1758827061"; // поле, где хранится чек-лист
-    const defaultDealId = 42; // запасной ID, если не найден
+<script>
+(function(){
+  const FIELD = 'UF_CRM_CHECKLIST'; // <-- замените на ваш UF_CRM_xxxxx (тип "Строка")
+  const state = document.getElementById('state');
+  const content = document.getElementById('content');
+  const dealInfo = document.getElementById('dealInfo');
+  const statusEl = document.getElementById('status');
+  const saveBtn = document.getElementById('saveBtn');
+  let DEAL_ID = null;
 
-    // === ⚙️ Вспомогательные функции ===
-    const statusEl = document.getElementById("status");
+  const qs = (sel)=>Array.from(document.querySelectorAll(sel));
 
-    function showStatus(msg, ok = true) {
-      statusEl.textContent = msg;
-      statusEl.style.color = ok ? "green" : "red";
-    }
+  function setStatus(msg, cls=''){ statusEl.className = cls; statusEl.textContent = msg; }
 
-    function getChecklistData() {
-      const boxes = document.querySelectorAll('input[type="checkbox"]');
-      return Array.from(boxes).map(b => ({ name: b.value, checked: b.checked }));
-    }
+  function getValues(){
+    return qs('input[type="checkbox"]').filter(i=>i.checked).map(i=>i.value);
+  }
+  function applyValues(arr){
+    const set = new Set((arr||[]).map(String));
+    qs('input[type="checkbox"]').forEach(i=> i.checked = set.has(i.value));
+  }
+  function parseStored(v){
+    if (v == null || v === '') return [];
+    // пробуем JSON -> иначе CSV -> иначе одиночное значение
+    try { const j = JSON.parse(v); return Array.isArray(j) ? j : [String(j)]; } catch(_){}
+    if (String(v).includes(',')) return String(v).split(',').map(s=>s.trim()).filter(Boolean);
+    return [String(v)];
+  }
 
-    function setChecklistData(data) {
-      if (!data) return;
-      const boxes = document.querySelectorAll('input[type="checkbox"]');
-      data.forEach((item, idx) => {
-        if (boxes[idx]) boxes[idx].checked = item.checked;
+  function init(){
+    if (!window.BX24){ state.textContent='Нет SDK Bitrix24'; return; }
+    BX24.init(function(){
+      state.textContent='Получаю контекст…';
+      BX24.placement.info(function(ctx){
+        DEAL_ID = ctx?.options?.ID ? Number(ctx.options.ID) : null;
+        if(!DEAL_ID){ state.textContent='Не найден ID сделки в placement'; return; }
+        loadDeal();
       });
-    }
+    });
+  }
 
-    async function getDealData(dealId) {
-      try {
-        const res = await fetch(`${webhook}crm.deal.get.json`, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ id: dealId })
-        });
-        const data = await res.json();
-        return data.result;
-      } catch (e) {
-        console.error("Ошибка getDealData:", e);
-        return null;
-      }
-    }
+  function loadDeal(){
+    state.textContent='Загружаю сделку #' + DEAL_ID + '…';
+    BX24.callMethod('crm.deal.get', { id: DEAL_ID }, function(res){
+      if(res.error()){ state.textContent = 'Ошибка: ' + res.error(); return; }
+      const deal = res.answer.result;
+      dealInfo.textContent = `Сделка #${DEAL_ID} — ${deal.TITLE || '(без названия)'}`;
+      applyValues(parseStored(deal[FIELD]));
+      state.style.display='none';
+      content.style.display='block';
+    });
+  }
 
-    async function updateDealField(dealId, field, value) {
-      try {
-        const res = await fetch(`${webhook}crm.deal.update.json`, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            id: dealId,
-            [`fields[${field}]`]: value
-          })
-        });
-        return await res.json();
-      } catch (e) {
-        console.error("Ошибка updateDealField:", e);
-      }
-    }
+  saveBtn.addEventListener('click', function(){
+    const values = getValues();
+    setStatus('Сохраняю…', 'muted');
 
-    // === 🚀 Основные функции ===
-    async function loadChecklist() {
-      const params = new URLSearchParams(window.location.search);
-      const dealId = params.get("deal_id") || defaultDealId;
+    // Сохраняем как JSON в строковое поле
+    const fields = {}; fields[FIELD] = JSON.stringify(values);
 
-      showStatus("⏳ Загружаем данные...");
+    BX24.callMethod('crm.deal.update', { id: DEAL_ID, fields }, function(res){
+      if(res.error()){ setStatus('Ошибка сохранения: ' + res.error(), 'err'); return; }
+      setStatus('Сохранено', 'ok');
+    });
+  });
 
-      const deal = await getDealData(dealId);
-      if (!deal) return showStatus("❌ Не удалось получить данные сделки", false);
-
-      try {
-        const savedData = JSON.parse(deal[fieldCode]);
-        if (savedData) setChecklistData(savedData);
-        showStatus("✅ Загружено");
-      } catch {
-        showStatus("⚠️ Нет сохранённых данных");
-      }
-    }
-
-    async function saveChecklist() {
-      const params = new URLSearchParams(window.location.search);
-      const dealId = params.get("deal_id") || defaultDealId;
-      const data = JSON.stringify(getChecklistData());
-
-      const result = await updateDealField(dealId, fieldCode, data);
-      if (result?.result) showStatus("💾 Сохранено!");
-      else showStatus("❌ Ошибка сохранения", false);
-    }
-
-    document.getElementById("saveBtn").addEventListener("click", saveChecklist);
-    window.onload = loadChecklist;
-  </script>
+  init();
+})();
+</script>
 </body>
 </html>
