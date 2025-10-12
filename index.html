@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <title>Чек-лист сделки</title>
+  <title>Чек-лист</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body{font-family:system-ui,Arial,sans-serif;margin:16px}
@@ -11,15 +11,21 @@
     .muted{color:#666}
     .ok{color:#0a7f2e}
     .err{color:#c00}
+    .row{margin:8px 0}
+    code{background:#f3f3f3;padding:2px 6px;border-radius:6px}
+    .small{font-size:12px}
   </style>
-  <script src="https://api.bitrix24.com/api/v1/"></script>
 </head>
 <body>
-  <div id="state" class="muted">Инициализация…</div>
+  <div id="state" class="muted">Загрузка…</div>
 
   <div id="content" style="display:none">
-    <div class="muted" id="dealInfo">Сделка —</div>
+    <div class="row small muted">
+      Сделка: <span id="dealLabel">—</span><br>
+      Поле: <span id="fieldLabel">—</span>
+    </div>
 
+    <!-- ЧЕКБОКСЫ — как вы просили -->
     <div class="item"><input type="checkbox" value="Копия паспорта"> Копия паспорта</div>
     <div class="item"><input type="checkbox" value="Копия СНИЛС"> Копия СНИЛС</div>
     <div class="item"><input type="checkbox" value="Копия ИНН"> Копия ИНН</div>
@@ -38,75 +44,120 @@
 
     <button id="saveBtn">💾 Сохранить</button>
     <div id="status" class="muted" style="margin-top:8px"></div>
+
+    <!-- Скрытое поле для синхронизации/копирования -->
+    <input type="hidden" id="UF_DYNAMIC_FIELD" value="">
+    <div class="row small muted">
+      Текущее значение поля: <code id="mirror"></code>
+      <div class="small">Также доступно в <code>location.hash</code> и в <code>document.title</code>.</div>
+    </div>
   </div>
 
 <script>
 (function(){
-  const FIELD = 'UF_CRM_CHECKLIST'; // <-- замените на ваш UF_CRM_xxxxx (тип "Строка")
+  // ===== НАСТРОЙКИ ПО УМОЛЧАНИЮ =====
+  const DEFAULT_FIELD = 'UF_CRM_CHECKLIST'; // можно заменить на ваш код поля
+  // ===================================
+
   const state = document.getElementById('state');
   const content = document.getElementById('content');
-  const dealInfo = document.getElementById('dealInfo');
   const statusEl = document.getElementById('status');
   const saveBtn = document.getElementById('saveBtn');
-  let DEAL_ID = null;
+  const mirror = document.getElementById('mirror');
+  const hiddenField = document.getElementById('UF_DYNAMIC_FIELD');
+  const dealLabel = document.getElementById('dealLabel');
+  const fieldLabel = document.getElementById('fieldLabel');
 
-  const qs = (sel)=>Array.from(document.querySelectorAll(sel));
+  const params = new URLSearchParams(location.search);
+  const DEAL_ID = params.get('deal') || '';            // ID сделки (для ключа localStorage)
+  const FIELD = params.get('field') || DEFAULT_FIELD;  // код поля
+  const URL_VALUE = params.get('value');               // стартовое значение из URL (JSON или CSV)
 
-  function setStatus(msg, cls=''){ statusEl.className = cls; statusEl.textContent = msg; }
+  dealLabel.textContent = DEAL_ID || '—';
+  fieldLabel.textContent = FIELD;
 
-  function getValues(){
+  function qs(sel){ return Array.from(document.querySelectorAll(sel)); }
+
+  function setStatus(msg, cls){
+    statusEl.className = cls || 'muted';
+    statusEl.textContent = msg;
+  }
+
+  function encodeTitle(s){
+    try { return btoa(unescape(encodeURIComponent(s))).slice(0,200); }
+    catch { return s.slice(0,200); }
+  }
+
+  function getChecked(){
     return qs('input[type="checkbox"]').filter(i=>i.checked).map(i=>i.value);
   }
-  function applyValues(arr){
-    const set = new Set((arr||[]).map(String));
-    qs('input[type="checkbox"]').forEach(i=> i.checked = set.has(i.value));
+
+  function setChecked(values){
+    const set = new Set((values||[]).map(String));
+    qs('input[type="checkbox"]').forEach(i => { i.checked = set.has(i.value); });
   }
-  function parseStored(v){
+
+  function parseValue(v){
     if (v == null || v === '') return [];
-    // пробуем JSON -> иначе CSV -> иначе одиночное значение
     try { const j = JSON.parse(v); return Array.isArray(j) ? j : [String(j)]; } catch(_){}
     if (String(v).includes(',')) return String(v).split(',').map(s=>s.trim()).filter(Boolean);
     return [String(v)];
   }
 
-  function init(){
-    if (!window.BX24){ state.textContent='Нет SDK Bitrix24'; return; }
-    BX24.init(function(){
-      state.textContent='Получаю контекст…';
-      BX24.placement.info(function(ctx){
-        DEAL_ID = ctx?.options?.ID ? Number(ctx.options.ID) : null;
-        if(!DEAL_ID){ state.textContent='Не найден ID сделки в placement'; return; }
-        loadDeal();
-      });
-    });
+  function stringify(values){
+    // Храним как JSON (универсально и без потерь)
+    return JSON.stringify(values);
   }
 
-  function loadDeal(){
-    state.textContent='Загружаю сделку #' + DEAL_ID + '…';
-    BX24.callMethod('crm.deal.get', { id: DEAL_ID }, function(res){
-      if(res.error()){ state.textContent = 'Ошибка: ' + res.error(); return; }
-      const deal = res.answer.result;
-      dealInfo.textContent = `Сделка #${DEAL_ID} — ${deal.TITLE || '(без названия)'}`;
-      applyValues(parseStored(deal[FIELD]));
-      state.style.display='none';
-      content.style.display='block';
-    });
+  function storageKey(){
+    return 'checklist:' + (DEAL_ID || 'default') + ':' + FIELD;
+    }
+  function loadInitial(){
+    // Приоритет: ?value=... -> localStorage -> пусто
+    if (URL_VALUE && URL_VALUE.trim() !== '') return parseValue(URL_VALUE);
+    const raw = localStorage.getItem(storageKey());
+    return parseValue(raw);
   }
 
-  saveBtn.addEventListener('click', function(){
-    const values = getValues();
-    setStatus('Сохраняю…', 'muted');
+  function syncOutputs(values){
+    const str = stringify(values);
+    hiddenField.id = FIELD;             // подменяем id скрытого поля на реальный код
+    hiddenField.value = str;            // значение поля (можно копировать)
+    mirror.textContent = str;           // отображение
+    location.hash = 'value=' + encodeURIComponent(str); // чтобы внешка могла считать без SDK
+    document.title = encodeTitle(str);  // короткая «сигнатура» в title
+  }
 
-    // Сохраняем как JSON в строковое поле
-    const fields = {}; fields[FIELD] = JSON.stringify(values);
+  function save(values){
+    const str = stringify(values);
+    localStorage.setItem(storageKey(), str); // пер-сделочный кеш
+    syncOutputs(values);
+  }
 
-    BX24.callMethod('crm.deal.update', { id: DEAL_ID, fields }, function(res){
-      if(res.error()){ setStatus('Ошибка сохранения: ' + res.error(), 'err'); return; }
-      setStatus('Сохранено', 'ok');
+  // Инициализация
+  const startValues = loadInitial();
+  setChecked(startValues);
+  syncOutputs(startValues);
+
+  state.style.display = 'none';
+  content.style.display = 'block';
+  setStatus('Готово', 'ok');
+
+  // Кнопка сохранить (по факту — форсируем запись и показываем статус)
+  saveBtn.addEventListener('click', () => {
+    const values = getChecked();
+    save(values);
+    setStatus('Сохранено локально • поле обновлено • hash/title обновлены', 'ok');
+  });
+
+  // Сохранять на лету при клике по чекбоксу
+  qs('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      save(getChecked());
+      setStatus('Автосохранение…', 'muted');
     });
   });
 
-  init();
 })();
 </script>
 </body>
