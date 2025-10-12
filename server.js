@@ -1,21 +1,31 @@
-// server.js — только API (страницу отдаёт Vercel Static)
+// server.js — отдаем index.html на любые пути/методы + API для чтения/записи поля
 const express = require("express");
-const app = express();
+const path = require("path");
 
+const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// ——— диагностика
+// CORS (на всякий случай)
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") return res.status(204).end();
+  next();
+});
+
+// ----------------- DIAG -----------------
 app.get("/api/diag", (req, res) => {
   res.json({
     ok: true,
     node: process.version,
-    hasEnv: !!process.env.BITRIX_WEBHOOK_URL,
+    hasEnv: !!process.env.BITRIX_WEBHOOK_URL
   });
 });
 
-// ——— чтение поля сделки
+// ----------------- API: READ -----------------
 app.get("/api/deal-field", async (req, res) => {
   try {
     const base = (process.env.BITRIX_WEBHOOK_URL || "").trim();
@@ -38,7 +48,8 @@ app.get("/api/deal-field", async (req, res) => {
   }
 });
 
-// ——— запись поля сделки (пишем JSON-строку массива)
+// ----------------- API: WRITE -----------------
+// Пишем JSON-строку массива в поле-СТРОКУ, как просили: ["Копия паспорта","Копия СНИЛС"]
 app.post("/api/deal-field", async (req, res) => {
   try {
     const base = (process.env.BITRIX_WEBHOOK_URL || "").trim();
@@ -48,10 +59,10 @@ app.post("/api/deal-field", async (req, res) => {
 
     const url = base.replace(/\/$/, "/") + "crm.deal.update.json";
 
-    // Попытка 1: urlencoded с вложенными ключами
+    // Попытка 1: urlencoded с вложенными ключами (рекомендованный формат для вебхука)
     const form1 = new URLSearchParams();
     form1.set("id", String(deal));
-    form1.set(`fields[${field}]`, String(value));
+    form1.set(`fields[${field}]`, String(value)); // value — JSON-строка
 
     let r = await fetch(url, {
       method: "POST",
@@ -63,7 +74,7 @@ app.post("/api/deal-field", async (req, res) => {
     let data; try { data = JSON.parse(raw); } catch { data = null; }
     if (data?.result === true) return res.json({ ok: true });
 
-    // Попытка 2: fields как JSON
+    // Попытка 2: fields как JSON (некоторым порталам нравится так)
     const form2 = new URLSearchParams();
     const fieldsObj = {}; fieldsObj[field] = String(value);
     form2.set("id", String(deal));
@@ -88,5 +99,17 @@ app.post("/api/deal-field", async (req, res) => {
     return res.status(200).json({ ok: false, error: "write_failed" });
   }
 });
+
+// ----------------- СТАТИКА/INDEX -----------------
+// Раздаём статику (GET/HEAD)
+app.use(express.static(path.join(__dirname), {
+  extensions: ["html"],
+  setHeaders: (res) => res.setHeader("Cache-Control", "no-store")
+}));
+
+// На ЛЮБОЙ метод/путь (кроме /api/*) — index.html
+const indexPath = path.join(__dirname, "index.html");
+app.all("/", (_req, res) => res.sendFile(indexPath));
+app.all(/^\/(?!api\/).*/, (_req, res) => res.sendFile(indexPath));
 
 module.exports = app;
