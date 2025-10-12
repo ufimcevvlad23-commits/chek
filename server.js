@@ -1,4 +1,4 @@
-// server.js — отдаем index.html на любые пути/методы + API для чтения/записи поля
+// server.js — страница + API. Работает и с env, и с хардкодом.
 const express = require("express");
 const path = require("path");
 
@@ -6,6 +6,16 @@ const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
+
+// ====== ЗАМЕНИ ЭТУ СТРОКУ НА СВОЙ ВЕБХУК (или оставь пустой) ======
+const HARDCODED_WEBHOOK = "https://YOUR-PORTAL.bitrix24.ru/rest/USER_ID/WEBHOOK_TOKEN/";
+// ====================================================================
+
+function getBaseWebhook() {
+  const env = (process.env.BITRIX_WEBHOOK_URL || "").trim();
+  const hard = (HARDCODED_WEBHOOK || "").trim();
+  return env || hard; // приоритет: ENV -> хардкод
+}
 
 // CORS (на всякий случай)
 app.use((req, res, next) => {
@@ -16,19 +26,20 @@ app.use((req, res, next) => {
   next();
 });
 
-// ----------------- DIAG -----------------
-app.get("/api/diag", (req, res) => {
+// ---------------- DIAG ----------------
+app.get("/api/diag", (_req, res) => {
   res.json({
     ok: true,
     node: process.version,
-    hasEnv: !!process.env.BITRIX_WEBHOOK_URL
+    hasEnv: !!process.env.BITRIX_WEBHOOK_URL,
+    hasHardcoded: !!HARDCODED_WEBHOOK
   });
 });
 
-// ----------------- API: READ -----------------
+// -------------- API: READ --------------
 app.get("/api/deal-field", async (req, res) => {
   try {
-    const base = (process.env.BITRIX_WEBHOOK_URL || "").trim();
+    const base = getBaseWebhook();
     const { deal, field } = req.query || {};
     if (!deal || !field) return res.status(400).json({ ok: false, error: "deal and field are required" });
     if (!base) return res.status(200).json({ ok: false, error: "BITRIX_WEBHOOK_URL not set" });
@@ -48,21 +59,20 @@ app.get("/api/deal-field", async (req, res) => {
   }
 });
 
-// ----------------- API: WRITE -----------------
-// Пишем JSON-строку массива в поле-СТРОКУ, как просили: ["Копия паспорта","Копия СНИЛС"]
+// ------------- API: WRITE -------------
 app.post("/api/deal-field", async (req, res) => {
   try {
-    const base = (process.env.BITRIX_WEBHOOK_URL || "").trim();
+    const base = getBaseWebhook();
     const { deal, field, value } = req.body || {};
     if (!deal || !field) return res.status(400).json({ ok: false, error: "deal and field are required" });
     if (!base) return res.status(200).json({ ok: false, error: "BITRIX_WEBHOOK_URL not set" });
 
     const url = base.replace(/\/$/, "/") + "crm.deal.update.json";
 
-    // Попытка 1: urlencoded с вложенными ключами (рекомендованный формат для вебхука)
+    // Попытка 1: urlencoded с вложенными ключами (рекомендуемый формат)
     const form1 = new URLSearchParams();
     form1.set("id", String(deal));
-    form1.set(`fields[${field}]`, String(value)); // value — JSON-строка
+    form1.set(`fields[${field}]`, String(value)); // value — JSON-строка массива
 
     let r = await fetch(url, {
       method: "POST",
@@ -74,7 +84,7 @@ app.post("/api/deal-field", async (req, res) => {
     let data; try { data = JSON.parse(raw); } catch { data = null; }
     if (data?.result === true) return res.json({ ok: true });
 
-    // Попытка 2: fields как JSON (некоторым порталам нравится так)
+    // Попытка 2: fields как JSON
     const form2 = new URLSearchParams();
     const fieldsObj = {}; fieldsObj[field] = String(value);
     form2.set("id", String(deal));
@@ -88,7 +98,6 @@ app.post("/api/deal-field", async (req, res) => {
 
     raw = await r.text();
     try { data = JSON.parse(raw); } catch { data = null; }
-
     if (data?.result === true) return res.json({ ok: true });
 
     const reason = data?.error_description || data?.error || `HTTP ${r.status}`;
@@ -100,14 +109,12 @@ app.post("/api/deal-field", async (req, res) => {
   }
 });
 
-// ----------------- СТАТИКА/INDEX -----------------
-// Раздаём статику (GET/HEAD)
+// ---------- статика + index.html ----------
 app.use(express.static(path.join(__dirname), {
   extensions: ["html"],
   setHeaders: (res) => res.setHeader("Cache-Control", "no-store")
 }));
 
-// На ЛЮБОЙ метод/путь (кроме /api/*) — index.html
 const indexPath = path.join(__dirname, "index.html");
 app.all("/", (_req, res) => res.sendFile(indexPath));
 app.all(/^\/(?!api\/).*/, (_req, res) => res.sendFile(indexPath));
